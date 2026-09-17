@@ -1,0 +1,35 @@
+# Automatic review on every PR. Enable after `/install-github-app` has added
+# ANTHROPIC_API_KEY (or CLAUDE_CODE_OAUTH_TOKEN) to the repo secrets.
+name: Code Review
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review, reopened]
+concurrency:
+  group: review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Use the reviewer agent to review this pull request's diff against the base branch.
+            Post the ranked findings and the merge verdict as a single PR comment.
+          claude_args: '--max-turns 25 --agent reviewer'
