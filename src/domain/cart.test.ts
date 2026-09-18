@@ -1,7 +1,18 @@
 import { describe, expect, it } from 'vitest'
-import { addProduct, clear, decrement, increment, itemCount, remove } from './cart'
+import { addProduct, canAddProduct, clear, decrement, increment, itemCount, remove } from './cart'
 import { cartTotal } from './money'
 import type { CartLine, Product } from './types'
+
+/**
+ * Deep-freezes `lines` (the array and each line object) so that any
+ * implementation which mutates in place (e.g. `existing.qty++`) throws in
+ * this strict-mode test module, instead of silently passing.
+ */
+function freezeLines(lines: CartLine[]): CartLine[] {
+  lines.forEach((l) => Object.freeze(l))
+  Object.freeze(lines)
+  return lines
+}
 
 const croissant: Product = {
   id: 'p-croissant',
@@ -46,6 +57,26 @@ describe('addProduct', () => {
     const lines = addProduct(input, croissant)
     expect(input).toEqual([])
     expect(lines).not.toBe(input)
+  })
+
+  it('never mutates the input on the bump path, and untouched lines keep identity', () => {
+    const croissantLine: CartLine = {
+      productId: 'p-croissant',
+      name: 'Croissant',
+      unitPrice: 5500,
+      qty: 1,
+    }
+    const cookieLine: CartLine = { productId: 'p-cookie', name: 'Cookie', unitPrice: 4000, qty: 1 }
+    const input = freezeLines([croissantLine, cookieLine])
+    const before = structuredClone(input)
+
+    const out = addProduct(input, croissant)
+
+    expect(input).toEqual(before)
+    expect(out).not.toBe(input)
+    expect(out[0]).not.toBe(croissantLine)
+    expect(out[0].qty).toBe(2)
+    expect(out[1]).toBe(cookieLine)
   })
 
   it('keeps lines for different products separate', () => {
@@ -95,6 +126,36 @@ describe('addProduct', () => {
       { productId: 'p-croissant', name: 'Croissant', unitPrice: 5500, qty: 2 },
     ])
   })
+
+  it('bumps qty using the existing snapshot even if the product price has since become non-integer', () => {
+    const lines = addProduct(
+      [{ productId: 'p-croissant', name: 'Croissant', unitPrice: 5500, qty: 1 }],
+      { ...croissant, price: 55.5 },
+    )
+    expect(lines).toEqual([
+      { productId: 'p-croissant', name: 'Croissant', unitPrice: 5500, qty: 2 },
+    ])
+  })
+})
+
+describe('canAddProduct', () => {
+  it('is true for a product not yet in the cart with an integer price', () => {
+    expect(canAddProduct([], croissant)).toBe(true)
+  })
+
+  it('is false for a product not yet in the cart with a non-integer price', () => {
+    expect(canAddProduct([], { ...croissant, price: 55.5 })).toBe(false)
+  })
+
+  it('is true for a product already in the cart, even with a non-integer price', () => {
+    const lines = [{ productId: 'p-croissant', name: 'Croissant', unitPrice: 5500, qty: 1 }]
+    expect(canAddProduct(lines, { ...croissant, price: 55.5 })).toBe(true)
+  })
+
+  it('is true for an archived or out-of-stock product regardless of price', () => {
+    expect(canAddProduct([], { ...croissant, archived: true, price: 55.5 })).toBe(true)
+    expect(canAddProduct([], { ...croissant, outOfStock: true, price: 55.5 })).toBe(true)
+  })
 })
 
 describe('increment', () => {
@@ -112,6 +173,25 @@ describe('increment', () => {
     ]
     expect(increment(input, 'nope')).toBe(input)
   })
+
+  it('never mutates the input, and untouched lines keep identity', () => {
+    const croissantLine: CartLine = {
+      productId: 'p-croissant',
+      name: 'Croissant',
+      unitPrice: 5500,
+      qty: 1,
+    }
+    const cookieLine: CartLine = { productId: 'p-cookie', name: 'Cookie', unitPrice: 4000, qty: 1 }
+    const input = freezeLines([croissantLine, cookieLine])
+    const before = structuredClone(input)
+
+    const out = increment(input, 'p-croissant')
+
+    expect(input).toEqual(before)
+    expect(out[0]).not.toBe(croissantLine)
+    expect(out[0].qty).toBe(2)
+    expect(out[1]).toBe(cookieLine)
+  })
 })
 
 describe('decrement', () => {
@@ -125,6 +205,25 @@ describe('decrement', () => {
     ])
   })
 
+  it('never mutates the input on the qty>1 path, and untouched lines keep identity', () => {
+    const croissantLine: CartLine = {
+      productId: 'p-croissant',
+      name: 'Croissant',
+      unitPrice: 5500,
+      qty: 2,
+    }
+    const cookieLine: CartLine = { productId: 'p-cookie', name: 'Cookie', unitPrice: 4000, qty: 1 }
+    const input = freezeLines([croissantLine, cookieLine])
+    const before = structuredClone(input)
+
+    const out = decrement(input, 'p-croissant')
+
+    expect(input).toEqual(before)
+    expect(out[0]).not.toBe(croissantLine)
+    expect(out[0].qty).toBe(1)
+    expect(out[1]).toBe(cookieLine)
+  })
+
   it('removes the line once qty reaches 0', () => {
     const lines = decrement(
       [{ productId: 'p-croissant', name: 'Croissant', unitPrice: 5500, qty: 1 }],
@@ -133,8 +232,46 @@ describe('decrement', () => {
     expect(lines).toEqual([])
   })
 
-  it('never goes negative', () => {
-    const lines = decrement([], 'p-croissant')
+  it('never mutates the input on the removal path, and untouched lines keep identity', () => {
+    const croissantLine: CartLine = {
+      productId: 'p-croissant',
+      name: 'Croissant',
+      unitPrice: 5500,
+      qty: 1,
+    }
+    const cookieLine: CartLine = { productId: 'p-cookie', name: 'Cookie', unitPrice: 4000, qty: 2 }
+    const input = freezeLines([croissantLine, cookieLine])
+    const before = structuredClone(input)
+
+    const out = decrement(input, 'p-croissant')
+
+    expect(input).toEqual(before)
+    expect(out).toEqual([cookieLine])
+    expect(out[0]).toBe(cookieLine)
+  })
+
+  it('removes a line through a full add/decrement sequence, keeping qty an integer >= 1 at every step', () => {
+    let lines = addProduct(addProduct([], croissant), croissant)
+    expect(lines).toEqual([
+      { productId: 'p-croissant', name: 'Croissant', unitPrice: 5500, qty: 2 },
+    ])
+
+    for (let i = 0; i < 5; i++) {
+      lines = decrement(lines, 'p-croissant')
+      if (lines.length > 0) {
+        expect(Number.isInteger(lines[0].qty)).toBe(true)
+        expect(lines[0].qty).toBeGreaterThanOrEqual(1)
+      }
+    }
+
+    expect(lines).toEqual([])
+  })
+
+  it('removes a malformed qty:0 line instead of decrementing it to -1', () => {
+    const lines = decrement(
+      [{ productId: 'p-croissant', name: 'Croissant', unitPrice: 5500, qty: 0 }],
+      'p-croissant',
+    )
     expect(lines).toEqual([])
   })
 
