@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest'
+import { addProduct } from '../domain/cart'
+import { cartTotal } from '../domain/money'
 import { PosDatabase } from './db'
 import { completeOrder, voidOrder } from './orders'
+import { seedProducts } from './seed'
 
 let database: PosDatabase
 
@@ -51,6 +54,25 @@ describe('completeOrder', () => {
       database,
     )
     expect(o.payment.method).toBe('promptpay')
+  })
+
+  it('keeps the snapshot price even after the product is repriced in the db', async () => {
+    const product = seedProducts.find((p) => p.id === 'p-croissant')!
+    await database.products.add(product)
+    const lines = addProduct(addProduct([], product), product)
+
+    const order = await completeOrder(
+      lines,
+      { method: 'cash', tendered: cartTotal(lines), change: 0 },
+      database,
+    )
+
+    await database.products.update(product.id, { price: product.price + 10000 })
+
+    const stored = await database.orders.get(order.id)
+    expect(stored?.lines[0].unitPrice).toBe(product.price)
+    expect(stored?.total).toBe(product.price * 2)
+    expect(stored?.total).toBe(cartTotal(lines))
   })
 })
 
