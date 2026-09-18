@@ -68,11 +68,10 @@ describe('completeOrder', () => {
     const repriced = { ...seedProduct, price: originalPrice + 10000 }
     await database.products.update(seedProduct.id, { price: repriced.price })
 
-    // ...and a second unit is added using the now-stale `seedProduct`
-    // reference. `completeOrder` never reads the products table, so this
-    // only proves the snapshot survived if the line's price is still the
-    // original one, not the repriced one.
-    lines = addProduct(lines, seedProduct)
+    // ...and a second unit is added using the repriced product object.
+    // `addProduct` must still snapshot the existing line's original price
+    // when bumping qty, not the new (repriced) price.
+    lines = addProduct(lines, repriced)
     expect(lines).toEqual([
       { productId: seedProduct.id, name: seedProduct.name, unitPrice: originalPrice, qty: 2 },
     ])
