@@ -126,6 +126,36 @@ body,
   padding: 24px 4px;
 }
 
+/* Shared by every non-Sell screen's header row: a Back button plus an h1. */
+.screen-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.screen-header h1 {
+  font-size: 1.25rem;
+  margin: 0;
+}
+
+.back-button {
+  min-height: var(--tap);
+  min-width: var(--tap);
+  padding: 0 16px;
+  border: 2px solid var(--accent);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 600;
+  touch-action: manipulation;
+}
+
+.placeholder-screen p {
+  padding: 24px 4px;
+}
+
 .error-boundary {
   padding: 24px 16px;
   text-align: center;
