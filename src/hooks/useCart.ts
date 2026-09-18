@@ -29,6 +29,29 @@ function describeInvalidCartLine(line: CartLine): string {
 }
 
 /**
+ * The subset of `lines` that every action should actually operate on:
+ * well-formed, de-duplicated by `productId` (see `partitionCartLines`).
+ *
+ * Returns `lines` itself (same reference) when nothing is invalid, so a
+ * true no-op action (e.g. incrementing an unknown productId) still leaves
+ * the exposed `lines` referentially unchanged — this is the same
+ * "same-reference when nothing invalid" rule `useCart` applies to what it
+ * exposes, reused here for what actions consume.
+ *
+ * This matters because a *raw* invalid line is still a real element of the
+ * state array: `increment`/`decrement`/`remove` look up lines by
+ * `productId` and don't know an entry is corrupt, so operating on the raw
+ * array can silently resurrect garbage (e.g. bumping a stray `qty: 0` line
+ * back into validity) or, worse, crash outright (`.productId` on a `null`
+ * entry). Cleaning first means every action only ever touches data that
+ * was already validated and logged.
+ */
+function cleanLines(lines: CartLine[]): CartLine[] {
+  const { valid, invalid } = cart.partitionCartLines(lines)
+  return invalid.length === 0 ? lines : valid
+}
+
+/**
  * In-memory cart for the current sale. Wraps the pure functions in
  * `src/domain/cart.ts` in React state — no Dexie, no network, no
  * persistence, so it works the same in airplane mode.
@@ -38,11 +61,18 @@ function describeInvalidCartLine(line: CartLine): string {
  *
  * The raw state can carry corrupt lines (seeded via `initialLines`, or in
  * principle reached some other way in future); `lines` exposes only the
- * well-formed ones (`partitionCartLines(raw).valid`), and each invalid line
- * is logged once per productId via `useLogInvalidOnce` — skipped and
- * logged, never thrown or shown, per CLAUDE.md. When nothing is invalid,
- * `lines` is the *same reference* as the raw state array, so the existing
- * same-reference tests (e.g. a no-op `add`) keep working unchanged.
+ * well-formed, de-duplicated ones (`partitionCartLines(raw).valid`), and
+ * each invalid line — including every repeat of a `productId` already kept
+ * — is logged once via `useLogInvalidOnce` — skipped and logged, never
+ * thrown or shown, per CLAUDE.md. When nothing is invalid, `lines` is the
+ * *same reference* as the raw state array, so the existing same-reference
+ * tests (e.g. a no-op `add`) keep working unchanged.
+ *
+ * Every action (`add`/`increment`/`decrement`/`remove`) runs on
+ * `cleanLines(prev)`, never on the raw state directly, so invalid raw
+ * lines are dropped the moment any action runs (after already having been
+ * logged once on render) instead of being available for a domain function
+ * to accidentally look up, bump, or remove alongside a same-id valid line.
  */
 export function useCart(initialLines: CartLine[] = []) {
   const [rawLines, setLines] = useState<CartLine[]>(initialLines)
@@ -65,7 +95,7 @@ export function useCart(initialLines: CartLine[] = []) {
   const add = useCallback((product: Product) => {
     setLines((prev) => {
       try {
-        return cart.addProduct(prev, product)
+        return cart.addProduct(cleanLines(prev), product)
       } catch (e) {
         console.error(
           `useCart.add: unexpected error adding product "${safeString(product.id)}" (price=${safeString(product.price)})`,
@@ -77,15 +107,15 @@ export function useCart(initialLines: CartLine[] = []) {
   }, [])
 
   const increment = useCallback((productId: string) => {
-    setLines((prev) => cart.increment(prev, productId))
+    setLines((prev) => cart.increment(cleanLines(prev), productId))
   }, [])
 
   const decrement = useCallback((productId: string) => {
-    setLines((prev) => cart.decrement(prev, productId))
+    setLines((prev) => cart.decrement(cleanLines(prev), productId))
   }, [])
 
   const remove = useCallback((productId: string) => {
-    setLines((prev) => cart.remove(prev, productId))
+    setLines((prev) => cart.remove(cleanLines(prev), productId))
   }, [])
 
   // Resets the raw state to [], which also drops any corrupt raw lines.
@@ -93,7 +123,20 @@ export function useCart(initialLines: CartLine[] = []) {
     setLines(cart.clear())
   }, [])
 
-  const total = useMemo(() => cartTotal(lines), [lines])
+  // `cartTotal` (money.ts) is deliberately unguarded — it trusts its input
+  // — so this is the one place a validated-but-pathological cart (e.g. two
+  // huge, individually-safe line totals that sum past
+  // Number.MAX_SAFE_INTEGER) is caught before it reaches the UI. Chosen
+  // fallback: show/return ฿0 rather than a wrapped-around or imprecise
+  // number, and log once so it's never silently wrong.
+  const total = useMemo(() => {
+    const sum = cartTotal(lines)
+    if (!Number.isSafeInteger(sum)) {
+      console.error(`useCart: total ${safeString(sum)} is not a safe integer — falling back to 0`)
+      return 0
+    }
+    return sum
+  }, [lines])
   const count = useMemo(() => cart.itemCount(lines), [lines])
 
   return { lines, total, count, add, increment, decrement, remove, clear }
