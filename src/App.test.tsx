@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { PosDatabase } from './db/db'
 import type { CartScreenProps } from './screens/CartScreen'
@@ -12,7 +12,8 @@ import type { SellScreenProps } from './screens/SellScreen'
 const screenThrowFlags = vi.hoisted(() => ({ cart: false, sell: false }))
 
 vi.mock('./screens/CartScreen', async () => {
-  const actual = await vi.importActual<typeof import('./screens/CartScreen')>('./screens/CartScreen')
+  const actual =
+    await vi.importActual<typeof import('./screens/CartScreen')>('./screens/CartScreen')
   return {
     CartScreen: (props: CartScreenProps) => {
       if (screenThrowFlags.cart) throw new Error('CartScreen boom (test)')
@@ -22,7 +23,8 @@ vi.mock('./screens/CartScreen', async () => {
 })
 
 vi.mock('./screens/SellScreen', async () => {
-  const actual = await vi.importActual<typeof import('./screens/SellScreen')>('./screens/SellScreen')
+  const actual =
+    await vi.importActual<typeof import('./screens/SellScreen')>('./screens/SellScreen')
   return {
     SellScreen: (props: SellScreenProps) => {
       if (screenThrowFlags.sell) throw new Error('SellScreen boom (test)')
@@ -38,6 +40,14 @@ beforeEach(async () => {
   await database.open()
   screenThrowFlags.cart = false
   screenThrowFlags.sell = false
+})
+
+// Restores every spy/mock after each test, so a failing test's
+// `console.error`/`fetch` spy can never leak into a later test. (This does
+// not touch the vi.mock('./screens/...') module mocks above, which are
+// reset per-test via screenThrowFlags in beforeEach instead.)
+afterEach(() => {
+  vi.restoreAllMocks()
 })
 
 describe('App', () => {
@@ -117,11 +127,10 @@ describe('App', () => {
     await screen.findByRole('heading', { name: 'Cart' })
 
     expect(fetchSpy).not.toHaveBeenCalled()
-    fetchSpy.mockRestore()
   })
 
   it('an error in the Cart screen shows Try again / Back to Sell / Reload; Back to Sell returns to Sell with the cart intact; Try again preserves the cart once recovered', async () => {
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
     render(<App database={database} />)
 
     const croissantTile = await screen.findByRole('button', { name: /Croissant/ })
@@ -157,12 +166,10 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: /try again/i }))
     expect(await screen.findByRole('heading', { name: 'Cart' })).toBeInTheDocument()
     expect(document.querySelector('.cart-bottom-bar-total')?.textContent).toBe('Total ฿55')
-
-    errorSpy.mockRestore()
   })
 
   it('an error on the Sell screen itself (already home) shows no Back to Sell button', async () => {
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
     screenThrowFlags.sell = true
     render(<App database={database} />)
 
@@ -170,7 +177,5 @@ describe('App', () => {
     expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /reload/i })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /back to sell/i })).not.toBeInTheDocument()
-
-    errorSpy.mockRestore()
   })
 })
