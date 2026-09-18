@@ -7,6 +7,9 @@ import type { CartLine, Product } from '../domain/types'
  * In-memory cart for the current sale. Wraps the pure functions in
  * `src/domain/cart.ts` in React state — no Dexie, no network, no
  * persistence, so it works the same in airplane mode.
+ *
+ * Call this once in `App` and pass the result down as a prop; calling it
+ * again in a screen creates a second, independent cart.
  */
 export function useCart() {
   const [lines, setLines] = useState<CartLine[]>([])
@@ -52,3 +55,5 @@ export function useCart() {
 
   return { lines, total, count, add, increment, decrement, remove, clear }
 }
+
+export type Cart = ReturnType<typeof useCart>
