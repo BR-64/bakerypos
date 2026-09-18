@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { addProduct, canAddProduct, clear, decrement, increment, itemCount, remove } from './cart'
+import {
+  addProduct,
+  clear,
+  decrement,
+  increment,
+  isSellable,
+  itemCount,
+  partitionSellable,
+  remove,
+} from './cart'
 import { cartTotal } from './money'
 import type { CartLine, Product } from './types'
 
@@ -97,8 +106,64 @@ describe('addProduct', () => {
     expect(addProduct(input, { ...croissant, outOfStock: true })).toBe(input)
   })
 
-  it('throws on a non-integer price', () => {
-    expect(() => addProduct([], { ...croissant, price: 55.5 })).toThrow('integer')
+  it('is a no-op — same reference, qty unchanged — for an archived product even when it already has a line in the cart', () => {
+    const input: CartLine[] = [
+      { productId: 'p-croissant', name: 'Croissant', unitPrice: 5500, qty: 1 },
+    ]
+    const out = addProduct(input, { ...croissant, archived: true })
+    expect(out).toBe(input)
+    expect(out[0].qty).toBe(1)
+  })
+
+  it('is a no-op — same reference, qty unchanged — for an out-of-stock product even when it already has a line in the cart', () => {
+    const input: CartLine[] = [
+      { productId: 'p-croissant', name: 'Croissant', unitPrice: 5500, qty: 1 },
+    ]
+    const out = addProduct(input, { ...croissant, outOfStock: true })
+    expect(out).toBe(input)
+    expect(out[0].qty).toBe(1)
+  })
+
+  it('returns lines unchanged (same reference), never throws, for a new line with a non-integer price', () => {
+    const input: CartLine[] = []
+    expect(() => addProduct(input, { ...croissant, price: 55.5 })).not.toThrow()
+    expect(addProduct(input, { ...croissant, price: 55.5 })).toBe(input)
+  })
+
+  it('returns lines unchanged, never throws, for a new line with a negative price', () => {
+    const input: CartLine[] = []
+    expect(addProduct(input, { ...croissant, price: -100 })).toBe(input)
+  })
+
+  it('returns lines unchanged, never throws, for a new line with an empty name', () => {
+    const input: CartLine[] = []
+    expect(addProduct(input, { ...croissant, name: '' })).toBe(input)
+  })
+
+  it('returns lines unchanged, never throws, when archived is a non-boolean value (e.g. the string "false")', () => {
+    // A non-boolean archived value must not be read for truthiness (the
+    // string "false" is truthy); it's simply invalid data, caught by
+    // isSellable, and the line is skipped either way.
+    const input: CartLine[] = []
+    // @ts-expect-error deliberately bad data
+    expect(addProduct(input, { ...croissant, archived: 'false' })).toBe(input)
+  })
+
+  it('returns lines unchanged, never throws, when outOfStock is a non-boolean value', () => {
+    const input: CartLine[] = []
+    // @ts-expect-error deliberately bad data
+    expect(addProduct(input, { ...croissant, outOfStock: 'false' })).toBe(input)
+  })
+
+  it('returns lines unchanged, never throws, for a missing id', () => {
+    const input: CartLine[] = []
+    // @ts-expect-error deliberately bad data
+    expect(addProduct(input, { ...croissant, id: undefined })).toBe(input)
+  })
+
+  it('returns lines unchanged, never throws, for a non-finite sortOrder', () => {
+    const input: CartLine[] = []
+    expect(addProduct(input, { ...croissant, sortOrder: NaN })).toBe(input)
   })
 
   it('keeps the snapshot price when re-adding a product whose price changed', () => {
@@ -135,26 +200,6 @@ describe('addProduct', () => {
     expect(lines).toEqual([
       { productId: 'p-croissant', name: 'Croissant', unitPrice: 5500, qty: 2 },
     ])
-  })
-})
-
-describe('canAddProduct', () => {
-  it('is true for a product not yet in the cart with an integer price', () => {
-    expect(canAddProduct([], croissant)).toBe(true)
-  })
-
-  it('is false for a product not yet in the cart with a non-integer price', () => {
-    expect(canAddProduct([], { ...croissant, price: 55.5 })).toBe(false)
-  })
-
-  it('is true for a product already in the cart, even with a non-integer price', () => {
-    const lines = [{ productId: 'p-croissant', name: 'Croissant', unitPrice: 5500, qty: 1 }]
-    expect(canAddProduct(lines, { ...croissant, price: 55.5 })).toBe(true)
-  })
-
-  it('is true for an archived or out-of-stock product regardless of price', () => {
-    expect(canAddProduct([], { ...croissant, archived: true, price: 55.5 })).toBe(true)
-    expect(canAddProduct([], { ...croissant, outOfStock: true, price: 55.5 })).toBe(true)
   })
 })
 
@@ -303,6 +348,93 @@ describe('remove', () => {
 describe('clear', () => {
   it('returns an empty cart', () => {
     expect(clear()).toEqual([])
+  })
+})
+
+describe('isSellable', () => {
+  it('is true for a well-formed product', () => {
+    expect(isSellable(croissant)).toBe(true)
+  })
+
+  it('is false for a non-integer price', () => {
+    expect(isSellable({ ...croissant, price: 55.5 })).toBe(false)
+  })
+
+  it('is false for a negative price', () => {
+    expect(isSellable({ ...croissant, price: -100 })).toBe(false)
+  })
+
+  it('is false for a NaN price', () => {
+    expect(isSellable({ ...croissant, price: NaN })).toBe(false)
+  })
+
+  it('is false for a missing price', () => {
+    // @ts-expect-error deliberately bad data
+    expect(isSellable({ ...croissant, price: undefined })).toBe(false)
+  })
+
+  it('is false for an empty or whitespace-only name', () => {
+    expect(isSellable({ ...croissant, name: '' })).toBe(false)
+    expect(isSellable({ ...croissant, name: '   ' })).toBe(false)
+  })
+
+  it('is false for a missing name', () => {
+    // @ts-expect-error deliberately bad data
+    expect(isSellable({ ...croissant, name: undefined })).toBe(false)
+  })
+
+  it('is true for a free (price 0) product', () => {
+    expect(isSellable({ ...croissant, price: 0 })).toBe(true)
+  })
+
+  it('is false for a missing id', () => {
+    // @ts-expect-error deliberately bad data
+    expect(isSellable({ ...croissant, id: undefined })).toBe(false)
+  })
+
+  it('is false for an empty id', () => {
+    expect(isSellable({ ...croissant, id: '' })).toBe(false)
+  })
+
+  it('is false for a non-finite sortOrder', () => {
+    expect(isSellable({ ...croissant, sortOrder: NaN })).toBe(false)
+    expect(isSellable({ ...croissant, sortOrder: Infinity })).toBe(false)
+    // @ts-expect-error deliberately bad data
+    expect(isSellable({ ...croissant, sortOrder: undefined })).toBe(false)
+  })
+
+  it('is false when archived is present but not a boolean', () => {
+    // @ts-expect-error deliberately bad data
+    expect(isSellable({ ...croissant, archived: 'false' })).toBe(false)
+  })
+
+  it('is false when outOfStock is present but not a boolean', () => {
+    // @ts-expect-error deliberately bad data
+    expect(isSellable({ ...croissant, outOfStock: 'false' })).toBe(false)
+  })
+
+  it('is true when archived/outOfStock are absent (undefined is not "present")', () => {
+    const { archived: _archived, outOfStock: _outOfStock, ...rest } = croissant
+    // @ts-expect-error deliberately missing fields
+    expect(isSellable(rest)).toBe(true)
+  })
+})
+
+describe('partitionSellable', () => {
+  it('splits well-formed products into sellable and invalid ones into invalid', () => {
+    const badPrice = { ...croissant, id: 'p-bad', price: -1 }
+    const { sellable, invalid } = partitionSellable([croissant, cookie, badPrice])
+    expect(sellable).toEqual([croissant, cookie])
+    expect(invalid).toEqual([badPrice])
+  })
+
+  it('returns empty arrays for no products', () => {
+    expect(partitionSellable([])).toEqual({ sellable: [], invalid: [] })
+  })
+
+  it('out-of-stock products are sellable (valid data), not invalid', () => {
+    const outOfStock = { ...croissant, outOfStock: true }
+    expect(partitionSellable([outOfStock])).toEqual({ sellable: [outOfStock], invalid: [] })
   })
 })
 

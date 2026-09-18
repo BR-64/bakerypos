@@ -68,11 +68,10 @@ describe('completeOrder', () => {
     const repriced = { ...seedProduct, price: originalPrice + 10000 }
     await database.products.update(seedProduct.id, { price: repriced.price })
 
-    // ...and a second unit is added using the now-stale `seedProduct`
-    // reference. `completeOrder` never reads the products table, so this
-    // only proves the snapshot survived if the line's price is still the
-    // original one, not the repriced one.
-    lines = addProduct(lines, seedProduct)
+    // ...and a second unit is added using the repriced product object.
+    // `addProduct` must still snapshot the existing line's original price
+    // when bumping qty, not the new (repriced) price.
+    lines = addProduct(lines, repriced)
     expect(lines).toEqual([
       { productId: seedProduct.id, name: seedProduct.name, unitPrice: originalPrice, qty: 2 },
     ])
@@ -89,6 +88,25 @@ describe('completeOrder', () => {
     expect(stored?.total).toBe(cartTotal(lines))
     // Sanity check the repriced value was never used.
     expect(stored?.total).not.toBe(cartTotal([{ ...lines[0], unitPrice: repriced.price }]))
+  })
+
+  it('repricing a product after completeOrder does not change the stored order', async () => {
+    const seedProduct = seedProducts.find((p) => p.id === 'p-croissant')!
+    await database.products.add(seedProduct)
+    const originalPrice = seedProduct.price
+
+    const lines = addProduct([], seedProduct)
+    const order = await completeOrder(
+      lines,
+      { method: 'cash', tendered: cartTotal(lines), change: 0 },
+      database,
+    )
+
+    await database.products.update(seedProduct.id, { price: originalPrice + 10000 })
+
+    const stored = await database.orders.get(order.id)
+    expect(stored?.lines[0].unitPrice).toBe(originalPrice)
+    expect(stored?.total).toBe(originalPrice)
   })
 })
 
