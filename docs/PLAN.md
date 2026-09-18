@@ -6,7 +6,7 @@ acceptance criterion the reviewer/tester agents check against. Tick the box when
 Files already in place from the scaffold: `src/domain/{types,money}.ts` (+tests),
 `src/db/{db,seed,orders}.ts` (+tests), PWA config, placeholder `App.tsx`.
 
-- [ ] **1. Cart state + hook.** `src/domain/cart.ts` pure functions (`addProduct`, `increment`,
+- [x] **1. Cart state + hook.** `src/domain/cart.ts` pure functions (`addProduct`, `increment`,
       `decrement`, `remove`, `clear`) operating on `CartLine[]`, snapshotting name/price from the
       `Product`; `src/hooks/useCart.ts` wrapping them in React state.
       _Accept:_ unit tests cover every function incl. decrement-to-zero removes the line; qty
