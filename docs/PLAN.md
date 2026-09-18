@@ -12,11 +12,21 @@ Files already in place from the scaffold: `src/domain/{types,money}.ts` (+tests)
       _Accept:_ unit tests cover every function incl. decrement-to-zero removes the line; qty
       never goes negative.
 
-- [ ] **2. Sell screen.** `src/screens/SellScreen.tsx` with category tabs, product grid from
-      Dexie (`useLiveQuery`), out-of-stock tiles disabled, sticky bottom bar with count + total.
-      Replace the placeholder in `App.tsx`. Touch targets ≥ 48px.
-      _Accept:_ Testing Library test — tapping a tile updates the bottom bar total; a disabled
-      tile does not.
+- [x] **2. Sell screen.** `src/db/products.ts` `sellableProducts(database = db)` (sorted by
+      `sortOrder`, archived filtered in JS, out-of-stock kept); `src/domain/categories.ts`
+      (`CATEGORY_ORDER`, `categoryLabel`, `visibleCategories`, `productsInCategory`, "All" tab);
+      components `ProductTile` (disabled + "Sold out" when out of stock; disabled + "Unavailable"
+      for invalid data), `CategoryTabs`, `CartBar` (count + `formatBaht(total)`, sticky, `onOpen`),
+      `ErrorBoundary` (reload fallback); `src/screens/SellScreen.tsx` using `useLiveQuery` with an
+      injectable `database` prop and a `cart: Pick<Cart, 'add' | 'count' | 'total'>` prop.
+      `App.tsx` calls `useCart()` once and passes it down. `useCart.add` never throws (try/catch
+      inside the updater). Tiles ≥ 88px, all other touch targets ≥ 48px. The Sell screen never
+      crashes on bad product data. No new dependencies, no schema change, no network.
+      _Accept:_ Testing Library test on a fresh `PosDatabase` — tapping an in-stock tile updates
+      the bottom bar total (฿0 → ฿55 → ฿110); an out-of-stock tile is disabled and does not
+      change it; archived products are not rendered; a category tab filters the grid; products
+      with invalid price/name/category render without crashing and cannot be added; `fetch` is
+      never called.
 
 - [ ] **3. Cart screen.** `src/screens/CartScreen.tsx` with lines, steppers, clear-with-confirm,
       Cash and PromptPay buttons. Simple screen state in `App.tsx` (no router needed yet).
