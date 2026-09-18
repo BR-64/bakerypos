@@ -106,6 +106,24 @@ describe('addProduct', () => {
     expect(addProduct(input, { ...croissant, outOfStock: true })).toBe(input)
   })
 
+  it('is a no-op — same reference, qty unchanged — for an archived product even when it already has a line in the cart', () => {
+    const input: CartLine[] = [
+      { productId: 'p-croissant', name: 'Croissant', unitPrice: 5500, qty: 1 },
+    ]
+    const out = addProduct(input, { ...croissant, archived: true })
+    expect(out).toBe(input)
+    expect(out[0].qty).toBe(1)
+  })
+
+  it('is a no-op — same reference, qty unchanged — for an out-of-stock product even when it already has a line in the cart', () => {
+    const input: CartLine[] = [
+      { productId: 'p-croissant', name: 'Croissant', unitPrice: 5500, qty: 1 },
+    ]
+    const out = addProduct(input, { ...croissant, outOfStock: true })
+    expect(out).toBe(input)
+    expect(out[0].qty).toBe(1)
+  })
+
   it('returns lines unchanged (same reference), never throws, for a new line with a non-integer price', () => {
     const input: CartLine[] = []
     expect(() => addProduct(input, { ...croissant, price: 55.5 })).not.toThrow()

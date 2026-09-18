@@ -68,20 +68,26 @@ export function partitionSellable(products: Product[]): PartitionedProducts {
  * mutates `lines`.
  *
  * Archived or out-of-stock products (checked with `=== true`, never
- * truthiness) and products that fail `isSellable` are a no-op — returns
- * `lines` unchanged, same reference, rather than throwing. The grid should
- * already prevent tapping these, but a stale tile or a direct call must
- * never crash the sale. Bumping an existing line reuses its stored
- * snapshot price/name, so a product that has since become invalid must
- * still bump correctly — only a genuinely *new* line is checked against
- * `isSellable`.
+ * truthiness) are always a no-op — returns `lines` unchanged, same
+ * reference — even when the product already has a line in the cart: a
+ * product that's since been archived or gone out of stock must never bump
+ * its existing line either. This check runs before the existing-line
+ * lookup, so it applies unconditionally.
+ *
+ * A product that fails the rest of `isSellable` (bad price/name/etc.) is
+ * only a no-op when it would start a genuinely *new* line — bumping an
+ * existing line reuses its stored snapshot price/name and skips that
+ * check, so a product that's since been repriced or renamed to something
+ * invalid still bumps correctly at its original snapshot. Neither case
+ * throws; the grid should already prevent tapping these, but a stale tile
+ * or a direct call must never crash the sale.
  */
 export function addProduct(lines: CartLine[], product: Product): CartLine[] {
+  if (product.archived === true || product.outOfStock === true) return lines
   const existing = lines.find((l) => l.productId === product.id)
   if (existing) {
     return lines.map((l) => (l.productId === product.id ? { ...l, qty: l.qty + 1 } : l))
   }
-  if (product.archived === true || product.outOfStock === true) return lines
   if (!isSellable(product)) return lines
   return [...lines, { productId: product.id, name: product.name, unitPrice: product.price, qty: 1 }]
 }

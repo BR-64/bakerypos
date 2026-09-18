@@ -181,16 +181,37 @@ describe('useCart', () => {
     expect(result.current.total).toBe(5500 * 3 + 4000 * 2)
   })
 
-  it('regression: repricing, renaming or archiving a product already in the cart leaves its snapshot line unchanged', () => {
+  it('regression: repricing or renaming a product already in the cart keeps its snapshot and still bumps qty to 2', () => {
     const { result } = renderHook(() => useCart())
     act(() => result.current.add(croissant))
 
-    act(() => result.current.add({ ...croissant, price: 6000, name: 'New Name', archived: true }))
+    act(() => result.current.add({ ...croissant, price: 6000, name: 'New Name' }))
 
     expect(result.current.lines).toEqual([
       { productId: 'p-croissant', name: 'Croissant', unitPrice: 5500, qty: 2 },
     ])
     expect(result.current.total).toBe(11000)
+  })
+
+  it('regression: archiving or going out of stock for a product already in the cart never bumps its line', () => {
+    const { result } = renderHook(() => useCart())
+    act(() => result.current.add(croissant))
+    const before = result.current.lines
+
+    act(() => result.current.add({ ...croissant, archived: true }))
+    expect(result.current.lines).toBe(before)
+    expect(result.current.lines).toEqual([
+      { productId: 'p-croissant', name: 'Croissant', unitPrice: 5500, qty: 1 },
+    ])
+
+    act(() => result.current.add({ ...croissant, outOfStock: true }))
+    expect(result.current.lines).toBe(before)
+    expect(result.current.lines).toEqual([
+      { productId: 'p-croissant', name: 'Croissant', unitPrice: 5500, qty: 1 },
+    ])
+
+    expect(result.current.count).toBe(1)
+    expect(result.current.total).toBe(5500)
   })
 
   it('keeps action identities stable across rerenders', () => {
