@@ -78,6 +78,33 @@ body,
   text-transform: uppercase;
 }
 
+.category-tabs {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 4px 0 12px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.category-tab {
+  flex: 0 0 auto;
+  min-height: var(--tap);
+  padding: 0 16px;
+  border: none;
+  border-radius: 999px;
+  background: var(--tile);
+  color: var(--fg);
+  font: inherit;
+  font-weight: 600;
+  white-space: nowrap;
+  touch-action: manipulation;
+}
+
+.category-tab[aria-selected='true'] {
+  background: var(--accent);
+  color: #fff;
+}
+
 .cart-bar {
   position: sticky;
   bottom: 0;
