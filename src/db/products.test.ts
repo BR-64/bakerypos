@@ -67,4 +67,39 @@ describe('sellableProducts', () => {
   it('returns an empty array for an empty table', async () => {
     expect(await sellableProducts(database)).toEqual([])
   })
+
+  it('does not silently drop a product with a missing/non-numeric sortOrder — it sorts last instead', async () => {
+    const badSortOrder = {
+      id: 'p-bad-sort',
+      name: 'Mystery Muffin',
+      price: 3000,
+      category: 'pastry',
+      outOfStock: false,
+      archived: false,
+      // sortOrder intentionally omitted — simulates a corrupted record.
+    } as unknown as Product
+    await database.products.bulkAdd([...fixtures, badSortOrder])
+
+    const result = await sellableProducts(database)
+
+    expect(result.map((p) => p.id)).toContain('p-bad-sort')
+    expect(result.at(-1)?.id).toBe('p-bad-sort')
+  })
+
+  it('treats archived strictly (=== true): a non-boolean archived value is kept, not silently filtered', async () => {
+    const stringArchived = {
+      id: 'p-string-archived',
+      name: 'Odd Item',
+      price: 1000,
+      category: 'pastry',
+      sortOrder: 99,
+      outOfStock: false,
+      archived: 'false',
+    } as unknown as Product
+    await database.products.add(stringArchived)
+
+    const result = await sellableProducts(database)
+
+    expect(result.some((p) => p.id === 'p-string-archived')).toBe(true)
+  })
 })
