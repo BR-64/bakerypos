@@ -38,6 +38,8 @@ required for a sale to complete.
 - **Touch targets ≥ 48px**; the checkout flow is at most two taps from cart to "paid".
 - Do not add dependencies without saying why in the PR description.
 - Do not edit `package-lock.json` by hand, `.env*`, or anything under `dev-dist/`.
+- Search and read only inside this repo; never run find or grep on / or the home folder.
+- **The Sell screen must never crash.** Invalid product or order data is skipped and logged, never thrown.
 
 ## Conventions
 
