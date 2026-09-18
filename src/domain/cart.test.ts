@@ -239,6 +239,24 @@ describe('increment', () => {
     expect(out[0].qty).toBe(2)
     expect(out[1]).toBe(cookieLine)
   })
+
+  it('is a no-op — same reference — when bumping would make the line itself unsafe (qty * unitPrice overflow)', () => {
+    const input: CartLine[] = [
+      { productId: 'p-huge', name: 'Huge', unitPrice: Number.MAX_SAFE_INTEGER, qty: 1 },
+    ]
+    expect(increment(input, 'p-huge')).toBe(input)
+  })
+
+  it('is a no-op — same reference — when bumping keeps the line itself safe but would push the cart total past Number.MAX_SAFE_INTEGER', () => {
+    const input: CartLine[] = [
+      { productId: 'p-a', name: 'A', unitPrice: Number.MAX_SAFE_INTEGER - 1, qty: 1 },
+      { productId: 'p-b', name: 'B', unitPrice: 1, qty: 1 },
+    ]
+    // Bumping p-b to qty 2 keeps p-b's own line trivially safe
+    // (unitPrice * qty = 2), but the cart total
+    // (MAX_SAFE_INTEGER - 1 + 2) would tip past Number.MAX_SAFE_INTEGER.
+    expect(increment(input, 'p-b')).toBe(input)
+  })
 })
 
 describe('decrement', () => {
@@ -464,7 +482,12 @@ describe('cartTotal of a mixed cart', () => {
   })
 })
 
-const croissantLine: CartLine = { productId: 'p-croissant', name: 'Croissant', unitPrice: 5500, qty: 2 }
+const croissantLine: CartLine = {
+  productId: 'p-croissant',
+  name: 'Croissant',
+  unitPrice: 5500,
+  qty: 2,
+}
 
 describe('isValidCartLine', () => {
   it('is true for a well-formed line', () => {
@@ -527,9 +550,9 @@ describe('isValidCartLine', () => {
   })
 
   it('is false when unitPrice * qty is not a safe integer', () => {
-    expect(
-      isValidCartLine({ ...croissantLine, unitPrice: Number.MAX_SAFE_INTEGER, qty: 2 }),
-    ).toBe(false)
+    expect(isValidCartLine({ ...croissantLine, unitPrice: Number.MAX_SAFE_INTEGER, qty: 2 })).toBe(
+      false,
+    )
   })
 
   it('is true for a zero unitPrice (free item)', () => {
@@ -555,7 +578,12 @@ describe('partitionCartLines', () => {
   })
 
   it('treats a second line with a repeated productId as invalid, keeping only the first occurrence in valid', () => {
-    const duplicate: CartLine = { productId: 'p-croissant', name: 'Croissant (dup)', unitPrice: 6000, qty: 5 }
+    const duplicate: CartLine = {
+      productId: 'p-croissant',
+      name: 'Croissant (dup)',
+      unitPrice: 6000,
+      qty: 5,
+    }
     const { valid, invalid } = partitionCartLines([croissantLine, duplicate])
     expect(valid).toEqual([croissantLine])
     expect(invalid).toEqual([duplicate])
@@ -567,5 +595,45 @@ describe('partitionCartLines', () => {
     const { valid, invalid } = partitionCartLines([croissantLine, dup1, dup2])
     expect(valid).toEqual([croissantLine])
     expect(invalid).toEqual([dup1, dup2])
+  })
+
+  it('treats a line as invalid when it would push the running cart total past Number.MAX_SAFE_INTEGER, keeping the earlier line(s)', () => {
+    const first: CartLine = {
+      productId: 'p-a',
+      name: 'A',
+      unitPrice: Number.MAX_SAFE_INTEGER,
+      qty: 1,
+    }
+    const second: CartLine = {
+      productId: 'p-b',
+      name: 'B',
+      unitPrice: Number.MAX_SAFE_INTEGER,
+      qty: 1,
+    }
+    const { valid, invalid } = partitionCartLines([first, second])
+    expect(valid).toEqual([first])
+    expect(invalid).toEqual([second])
+  })
+
+  it('a line that fits the running total on its own is valid, even after an earlier line overflowed and was skipped', () => {
+    const first: CartLine = {
+      productId: 'p-a',
+      name: 'A',
+      unitPrice: Number.MAX_SAFE_INTEGER - 20000,
+      qty: 1,
+    }
+    const overflowing: CartLine = {
+      productId: 'p-b',
+      name: 'B',
+      unitPrice: Number.MAX_SAFE_INTEGER,
+      qty: 1,
+    }
+    const fitsAfter: CartLine = { productId: 'p-c', name: 'C', unitPrice: 11000, qty: 1 }
+    const { valid, invalid } = partitionCartLines([first, overflowing, fitsAfter])
+    // The running total only ever accounts for lines actually kept, so
+    // `overflowing` being skipped doesn't stop `fitsAfter` from fitting
+    // against `first`'s running total alone.
+    expect(valid).toEqual([first, fitsAfter])
+    expect(invalid).toEqual([overflowing])
   })
 })

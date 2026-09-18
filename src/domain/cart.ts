@@ -1,3 +1,4 @@
+import { cartTotal, lineTotal } from './money'
 import type { CartLine, Product } from './types'
 
 /**
@@ -97,11 +98,21 @@ export function addProduct(lines: CartLine[], product: Product): CartLine[] {
 
 /**
  * Bump a line's qty by 1. Unknown productId returns `lines` unchanged (same
- * reference).
+ * reference). Also a no-op (same reference) if bumping would make the
+ * line's own `unitPrice * qty` unsafe, or would push the whole cart's
+ * total past `Number.MAX_SAFE_INTEGER` — "+" must never be the thing that
+ * makes a line or the cart invalid; `partitionCartLines`/`cleanLines`
+ * would just hide the result on the next render anyway, which would make
+ * "+" appear to silently do nothing to the UI while still mutating state.
  */
 export function increment(lines: CartLine[], productId: string): CartLine[] {
-  if (!lines.some((l) => l.productId === productId)) return lines
-  return lines.map((l) => (l.productId === productId ? { ...l, qty: l.qty + 1 } : l))
+  const line = lines.find((l) => l.productId === productId)
+  if (!line) return lines
+  const bumped = { ...line, qty: line.qty + 1 }
+  if (!Number.isSafeInteger(lineTotal(bumped))) return lines
+  const nextLines = lines.map((l) => (l.productId === productId ? bumped : l))
+  if (!Number.isSafeInteger(cartTotal(nextLines))) return lines
+  return nextLines
 }
 
 /**
@@ -175,27 +186,45 @@ export interface PartitionedCartLines {
 
 /**
  * Splits `lines` into the well-formed ones and the invalid ones, keeping
- * input order within each group. A line that's individually well-formed
- * but repeats a `productId` already kept in `valid` is treated as invalid
- * too — cart lines are keyed by `productId` everywhere downstream
- * (React's list key, and every action's lookup-by-productId), so a
- * duplicate would either render with a colliding key or get silently
- * double-mutated by `increment`/`decrement`. The *first* occurrence wins;
- * later ones are dropped into `invalid` and logged like any other corrupt
- * line. See `useCart`, which exposes only `valid` and logs each `invalid`
- * line once.
+ * input order within each group.
+ *
+ * Two things beyond `isValidCartLine` also make a line invalid here, both
+ * applying the same "first occurrence(s) win" rule:
+ *
+ * - A line that repeats a `productId` already kept in `valid` — cart lines
+ *   are keyed by `productId` everywhere downstream (React's list key, and
+ *   every action's lookup-by-productId), so a duplicate would either
+ *   render with a colliding key or get silently double-mutated by
+ *   `increment`/`decrement`.
+ * - A line that would push the *running* cart total (sum of `lineTotal`
+ *   over the lines kept so far) past `Number.MAX_SAFE_INTEGER`. This is
+ *   what keeps `total` (`useCart`, via `cartTotal`) always an exact,
+ *   trustworthy sum: an unsafe running total is cart data corrupt enough
+ *   to hide, not a number to silently wrap or clamp to some fallback —
+ *   money must never be approximate (CLAUDE.md).
+ *
+ * Either way the line is dropped into `invalid` and logged once, exactly
+ * like any other corrupt line. See `useCart`, which exposes only `valid`
+ * and logs each `invalid` line once.
  */
 export function partitionCartLines(lines: CartLine[]): PartitionedCartLines {
   const valid: CartLine[] = []
   const invalid: CartLine[] = []
   const seenProductIds = new Set<string>()
+  let runningTotal = 0
   for (const line of lines) {
-    if (isValidCartLine(line) && !seenProductIds.has(line.productId)) {
-      seenProductIds.add(line.productId)
-      valid.push(line)
-    } else {
+    if (!isValidCartLine(line) || seenProductIds.has(line.productId)) {
       invalid.push(line)
+      continue
     }
+    const nextTotal = runningTotal + lineTotal(line)
+    if (!Number.isSafeInteger(nextTotal)) {
+      invalid.push(line)
+      continue
+    }
+    seenProductIds.add(line.productId)
+    valid.push(line)
+    runningTotal = nextTotal
   }
   return { valid, invalid }
 }
