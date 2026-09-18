@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { addProduct, clear, decrement, increment, remove } from './cart'
+import { addProduct, clear, decrement, increment, itemCount, remove } from './cart'
+import { cartTotal } from './money'
 import type { CartLine, Product } from './types'
 
 const croissant: Product = {
@@ -52,6 +53,46 @@ describe('addProduct', () => {
     expect(lines).toEqual([
       { productId: 'p-croissant', name: 'Croissant', unitPrice: 5500, qty: 1 },
       { productId: 'p-cookie', name: 'Cookie', unitPrice: 4000, qty: 1 },
+    ])
+  })
+
+  it('is a no-op for an archived product', () => {
+    const input: CartLine[] = []
+    expect(addProduct(input, { ...croissant, archived: true })).toBe(input)
+  })
+
+  it('is a no-op for an out-of-stock product', () => {
+    const input: CartLine[] = []
+    expect(addProduct(input, { ...croissant, outOfStock: true })).toBe(input)
+  })
+
+  it('throws on a non-integer price', () => {
+    expect(() => addProduct([], { ...croissant, price: 55.5 })).toThrow('integer')
+  })
+
+  it('keeps the snapshot price when re-adding a product whose price changed', () => {
+    const lines = addProduct(
+      [{ productId: 'p-croissant', name: 'Croissant', unitPrice: 5500, qty: 1 }],
+      {
+        ...croissant,
+        price: 6000,
+      },
+    )
+    expect(lines).toEqual([
+      { productId: 'p-croissant', name: 'Croissant', unitPrice: 5500, qty: 2 },
+    ])
+  })
+
+  it('keeps the snapshot name when re-adding a renamed product', () => {
+    const lines = addProduct(
+      [{ productId: 'p-croissant', name: 'Croissant', unitPrice: 5500, qty: 1 }],
+      {
+        ...croissant,
+        name: 'Renamed Croissant',
+      },
+    )
+    expect(lines).toEqual([
+      { productId: 'p-croissant', name: 'Croissant', unitPrice: 5500, qty: 2 },
     ])
   })
 })
@@ -125,5 +166,25 @@ describe('remove', () => {
 describe('clear', () => {
   it('returns an empty cart', () => {
     expect(clear()).toEqual([])
+  })
+})
+
+describe('itemCount', () => {
+  it('sums qty across lines', () => {
+    expect(itemCount([])).toBe(0)
+    expect(
+      itemCount([
+        { productId: 'p-croissant', name: 'Croissant', unitPrice: 5500, qty: 2 },
+        { productId: 'p-cookie', name: 'Cookie', unitPrice: 4000, qty: 3 },
+      ]),
+    ).toBe(5)
+  })
+})
+
+describe('cartTotal of a mixed cart', () => {
+  it('sums unitPrice * qty across lines in integer satang', () => {
+    const lines = addProduct(addProduct(addProduct([], croissant), croissant), cookie)
+    expect(itemCount(lines)).toBe(3)
+    expect(cartTotal(lines)).toBe(15000)
   })
 })

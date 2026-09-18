@@ -5,8 +5,17 @@ import type { CartLine, Product } from './types'
  * cart, bumps that line's qty by 1 — the line keeps its original snapshot
  * (name/unitPrice) even if the product's price has since changed. Never
  * mutates `lines`.
+ *
+ * Archived or out-of-stock products are a no-op (returns `lines` unchanged,
+ * same reference) rather than throwing — the grid should already prevent
+ * tapping them, but a stale tile shouldn't crash the sale. A non-integer
+ * price is a data bug, not a stock state, so that throws.
  */
 export function addProduct(lines: CartLine[], product: Product): CartLine[] {
+  if (product.archived || product.outOfStock) return lines
+  if (!Number.isInteger(product.price)) {
+    throw new Error('Product price must be integer satang')
+  }
   const existing = lines.find((l) => l.productId === product.id)
   if (existing) {
     return lines.map((l) => (l.productId === product.id ? { ...l, qty: l.qty + 1 } : l))
@@ -43,4 +52,9 @@ export function remove(lines: CartLine[], productId: string): CartLine[] {
 /** Empty the cart. */
 export function clear(): CartLine[] {
   return []
+}
+
+/** Total number of items in the cart (sum of qty across lines). */
+export function itemCount(lines: CartLine[]): number {
+  return lines.reduce((sum, l) => sum + l.qty, 0)
 }
