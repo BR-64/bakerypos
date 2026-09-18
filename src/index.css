@@ -105,6 +105,39 @@ body,
   color: #fff;
 }
 
+.sell-screen {
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 0;
+  min-height: 100%;
+}
+
+.sell-screen-message {
+  padding: 24px 4px;
+}
+
+.sell-grid {
+  padding-bottom: calc(var(--tap) + 48px);
+}
+
+.error-boundary {
+  padding: 24px 16px;
+  text-align: center;
+}
+
+.error-boundary-reload {
+  min-height: var(--tap);
+  min-width: var(--tap);
+  padding: 0 24px;
+  border: none;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  touch-action: manipulation;
+}
+
 .cart-bar {
   position: sticky;
   bottom: 0;
