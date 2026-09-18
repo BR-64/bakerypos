@@ -89,6 +89,16 @@ describe('productsInCategory', () => {
     expect(productsInCategory(products, 'bread').map((p) => p.id)).toEqual(['p1', 'p3'])
   })
 
+  it('a product with category: null renders under "all" only (regression)', () => {
+    // @ts-expect-error deliberately bad data
+    const bad = product({ id: 'p-null', category: null })
+    const products = [product({ id: 'p1', category: 'bread' }), bad]
+    expect(() => visibleCategories(products)).not.toThrow()
+    expect(visibleCategories(products)).toEqual(['bread'])
+    expect(productsInCategory(products, 'all')).toEqual(products)
+    expect(productsInCategory(products, 'bread')).toEqual([products[0]])
+  })
+
   it('a product with an unknown category never appears under a named tab, but still appears under "all"', () => {
     // @ts-expect-error deliberately bad data
     const bad = product({ id: 'p-bad', category: 'nonsense' })

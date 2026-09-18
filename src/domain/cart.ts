@@ -1,19 +1,64 @@
 import type { CartLine, Product } from './types'
 
 /**
- * Whether `product` is well-formed enough to sell: a non-empty name and a
- * price that is a non-negative integer (satang). The Sell screen uses this
- * to decide whether a tile is tappable — bad data (a non-integer, negative,
- * NaN or missing price, or an empty/missing name) must never crash the
- * screen or `addProduct`, so it's shown disabled instead.
+ * Whether a value that should be a boolean (`archived`, `outOfStock`) is
+ * actually a boolean, or simply absent. A record that carries the field
+ * with a non-boolean value (e.g. the string `"false"`) is corrupt data, not
+ * "falsy" — callers must never guess truthiness for these fields, only
+ * check `=== true`.
+ */
+function isBooleanOrAbsent(value: unknown): boolean {
+  return typeof value === 'boolean' || typeof value === 'undefined'
+}
+
+/**
+ * Whether `product` is well-formed enough to sell. The Sell screen must
+ * never crash or misbehave on bad data (CLAUDE.md: "Invalid product or
+ * order data is skipped and logged, never thrown"), so this is the single
+ * source of truth for what counts as invalid:
+ *
+ * - `id` missing or not a non-empty string
+ * - `name` missing, empty/whitespace-only, or not a string
+ * - `price` not a non-negative integer (satang) — zero is allowed (a free
+ *   item isn't forbidden by the spec)
+ * - `sortOrder` not a finite number
+ * - `archived` / `outOfStock` present but not a boolean (e.g. `"false"`) —
+ *   absent is fine and treated as `false` elsewhere, via `=== true` checks
  */
 export function isSellable(product: Product): boolean {
   return (
+    typeof product.id === 'string' &&
+    product.id.length > 0 &&
     typeof product.name === 'string' &&
     product.name.trim().length > 0 &&
     Number.isInteger(product.price) &&
-    product.price >= 0
+    product.price >= 0 &&
+    Number.isFinite(product.sortOrder) &&
+    isBooleanOrAbsent(product.archived) &&
+    isBooleanOrAbsent(product.outOfStock)
   )
+}
+
+export interface PartitionedProducts {
+  /** Well-formed products, safe to render and add to the cart. */
+  sellable: Product[]
+  /** Invalid records — never rendered, only logged (see `isSellable`). */
+  invalid: Product[]
+}
+
+/**
+ * Splits `products` into the well-formed ones and the invalid ones. The
+ * Sell screen renders only `sellable` and logs each `invalid` product once
+ * (see `src/screens/SellScreen.tsx`) — invalid data is skipped, not shown
+ * disabled, and never thrown.
+ */
+export function partitionSellable(products: Product[]): PartitionedProducts {
+  const sellable: Product[] = []
+  const invalid: Product[] = []
+  for (const product of products) {
+    ;(isSellable(product) ? sellable : invalid).push(product)
+  }
+  return { sellable, invalid }
 }
 
 /**
@@ -22,26 +67,22 @@ export function isSellable(product: Product): boolean {
  * (name/unitPrice) even if the product's price has since changed. Never
  * mutates `lines`.
  *
- * Archived or out-of-stock products are a no-op (returns `lines` unchanged,
- * same reference) rather than throwing — the grid should already prevent
- * tapping them, but a stale tile shouldn't crash the sale.
- *
- * The price is only validated when it would be snapshotted onto a *new*
- * line: bumping an existing line reuses its stored snapshot price, so a
- * product that has since been repriced to something invalid must not stop
- * the bump. A non-integer price on a genuinely new line is a data bug, so
- * that still throws — callers that can't tolerate a throw (e.g. inside a
- * React state updater) should catch it there instead.
+ * Archived or out-of-stock products (checked with `=== true`, never
+ * truthiness) and products that fail `isSellable` are a no-op — returns
+ * `lines` unchanged, same reference, rather than throwing. The grid should
+ * already prevent tapping these, but a stale tile or a direct call must
+ * never crash the sale. Bumping an existing line reuses its stored
+ * snapshot price/name, so a product that has since become invalid must
+ * still bump correctly — only a genuinely *new* line is checked against
+ * `isSellable`.
  */
 export function addProduct(lines: CartLine[], product: Product): CartLine[] {
-  if (product.archived || product.outOfStock) return lines
   const existing = lines.find((l) => l.productId === product.id)
   if (existing) {
     return lines.map((l) => (l.productId === product.id ? { ...l, qty: l.qty + 1 } : l))
   }
-  if (!Number.isInteger(product.price)) {
-    throw new Error('Product price must be integer satang')
-  }
+  if (product.archived === true || product.outOfStock === true) return lines
+  if (!isSellable(product)) return lines
   return [...lines, { productId: product.id, name: product.name, unitPrice: product.price, qty: 1 }]
 }
 

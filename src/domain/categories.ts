@@ -23,7 +23,7 @@ const CATEGORY_LABELS: Record<Category, string> = {
  * a neutral label instead.
  */
 export function categoryLabel(category: Category): string {
-  return CATEGORY_LABELS[category] ?? 'Other'
+  return Object.hasOwn(CATEGORY_LABELS, category) ? CATEGORY_LABELS[category] : 'Other'
 }
 
 /** Whether `category` is one of the known, orderable categories. */
