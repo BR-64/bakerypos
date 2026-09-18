@@ -1,7 +1,7 @@
 import { act, renderHook } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import * as cartModule from '../domain/cart'
-import type { Product } from '../domain/types'
+import type { CartLine, Product } from '../domain/types'
 import { useCart } from './useCart'
 
 const croissant: Product = {
@@ -214,6 +214,18 @@ describe('useCart', () => {
     expect(result.current.total).toBe(5500)
   })
 
+  it('regression: lines keeps the same reference as the raw array when nothing is invalid, across an increment', () => {
+    const { result } = renderHook(() => useCart())
+    act(() => result.current.add(croissant))
+    const before = result.current.lines
+
+    act(() => result.current.increment('p-croissant'))
+    expect(result.current.lines).not.toBe(before)
+    expect(result.current.lines).toEqual([
+      { productId: 'p-croissant', name: 'Croissant', unitPrice: 5500, qty: 2 },
+    ])
+  })
+
   it('keeps action identities stable across rerenders', () => {
     const { result, rerender } = renderHook(() => useCart())
     const first = {
@@ -230,5 +242,64 @@ describe('useCart', () => {
     expect(result.current.decrement).toBe(first.decrement)
     expect(result.current.remove).toBe(first.remove)
     expect(result.current.clear).toBe(first.clear)
+  })
+})
+
+describe('useCart with corrupt initial lines', () => {
+  const validLine: CartLine = { productId: 'p-croissant', name: 'Croissant', unitPrice: 5500, qty: 2 }
+  const corruptLines: CartLine[] = [
+    // empty productId
+    { productId: '', name: 'Bad Id', unitPrice: 100, qty: 1 },
+    // blank name
+    { productId: 'p-blank', name: '   ', unitPrice: 100, qty: 1 },
+    // negative unitPrice
+    { productId: 'p-neg', name: 'Negative', unitPrice: -50, qty: 1 },
+  ]
+
+  it('exposes only the valid line, and total/count exclude the corrupt ones', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { result } = renderHook(() => useCart([validLine, ...corruptLines]))
+
+    expect(result.current.lines).toEqual([validLine])
+    expect(result.current.total).toBe(11000)
+    expect(result.current.count).toBe(2)
+
+    errorSpy.mockRestore()
+  })
+
+  it('logs each corrupt line exactly once, across rerenders and actions', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { result, rerender } = renderHook(() => useCart([validLine, ...corruptLines]))
+
+    expect(errorSpy).toHaveBeenCalledTimes(3)
+
+    rerender()
+    act(() => result.current.increment('p-croissant'))
+    rerender()
+    act(() => result.current.decrement('p-croissant'))
+
+    expect(errorSpy).toHaveBeenCalledTimes(3)
+
+    errorSpy.mockRestore()
+  })
+
+  it('increment, decrement and clear still work with corrupt lines present', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { result } = renderHook(() => useCart([validLine, ...corruptLines]))
+
+    act(() => result.current.increment('p-croissant'))
+    expect(result.current.lines).toEqual([
+      { productId: 'p-croissant', name: 'Croissant', unitPrice: 5500, qty: 3 },
+    ])
+
+    act(() => result.current.decrement('p-croissant'))
+    expect(result.current.lines).toEqual([validLine])
+
+    act(() => result.current.clear())
+    expect(result.current.lines).toEqual([])
+    expect(result.current.total).toBe(0)
+    expect(result.current.count).toBe(0)
+
+    errorSpy.mockRestore()
   })
 })
