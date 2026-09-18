@@ -10,6 +10,12 @@ interface ErrorBoundaryProps {
    * "Reload" button is shown.
    */
   onRetry?: () => void
+  /**
+   * Called when "Back to Sell" is tapped. Shown only when given, between
+   * "Try again" and "Reload" — a secondary escape hatch for a screen other
+   * than Sell, since "Reload" would lose the in-memory cart.
+   */
+  onBack?: () => void
 }
 
 interface ErrorBoundaryState {
@@ -55,6 +61,15 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
                 onClick={this.props.onRetry}
               >
                 Try again
+              </button>
+            )}
+            {this.props.onBack && (
+              <button
+                type="button"
+                className="error-boundary-button error-boundary-back"
+                onClick={this.props.onBack}
+              >
+                Back to Sell
               </button>
             )}
             <button

@@ -42,6 +42,30 @@ describe('ErrorBoundary', () => {
     errorSpy.mockRestore()
   })
 
+  it('shows no Back to Sell button when onBack is not given', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    render(
+      <ErrorBoundary>
+        <Bomb />
+      </ErrorBoundary>,
+    )
+    expect(screen.queryByRole('button', { name: /back to sell/i })).not.toBeInTheDocument()
+    errorSpy.mockRestore()
+  })
+
+  it('shows a Back to Sell button when onBack is given, and calls it once on tap', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const onBack = vi.fn()
+    render(
+      <ErrorBoundary onBack={onBack}>
+        <Bomb />
+      </ErrorBoundary>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: /back to sell/i }))
+    expect(onBack).toHaveBeenCalledTimes(1)
+    errorSpy.mockRestore()
+  })
+
   it('the Reload button calls location.reload()', () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     // jsdom's window.location.reload is non-configurable, so it can't be
