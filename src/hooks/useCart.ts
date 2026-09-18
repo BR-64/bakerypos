@@ -11,7 +11,9 @@ import { useLogInvalidOnce } from './useLogInvalidOnce'
  * object. Never throws.
  */
 function field(line: CartLine, key: string): unknown {
-  return line && typeof line === 'object' ? (line as unknown as Record<string, unknown>)[key] : undefined
+  return line && typeof line === 'object'
+    ? (line as unknown as Record<string, unknown>)[key]
+    : undefined
 }
 
 /** Dedup key for an invalid cart line: its productId when present, otherwise a stringified copy. */
@@ -123,20 +125,14 @@ export function useCart(initialLines: CartLine[] = []) {
     setLines(cart.clear())
   }, [])
 
-  // `cartTotal` (money.ts) is deliberately unguarded — it trusts its input
-  // — so this is the one place a validated-but-pathological cart (e.g. two
-  // huge, individually-safe line totals that sum past
-  // Number.MAX_SAFE_INTEGER) is caught before it reaches the UI. Chosen
-  // fallback: show/return ฿0 rather than a wrapped-around or imprecise
-  // number, and log once so it's never silently wrong.
-  const total = useMemo(() => {
-    const sum = cartTotal(lines)
-    if (!Number.isSafeInteger(sum)) {
-      console.error(`useCart: total ${safeString(sum)} is not a safe integer — falling back to 0`)
-      return 0
-    }
-    return sum
-  }, [lines])
+  // `cartTotal` (money.ts) is deliberately unguarded — it trusts its
+  // input — but `lines` is always safe to sum: `partitionCartLines` keeps
+  // a running total as it builds `valid` and rejects any line that would
+  // push it past `Number.MAX_SAFE_INTEGER` (see its doc comment), so an
+  // overflowing line never reaches `lines` in the first place. `total`
+  // therefore always equals the exact sum of the visible lines — no
+  // fallback, nothing to log here.
+  const total = useMemo(() => cartTotal(lines), [lines])
   const count = useMemo(() => cart.itemCount(lines), [lines])
 
   return { lines, total, count, add, increment, decrement, remove, clear }

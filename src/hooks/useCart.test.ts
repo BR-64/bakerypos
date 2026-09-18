@@ -1,8 +1,15 @@
 import { act, renderHook } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { StrictMode } from 'react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as cartModule from '../domain/cart'
 import type { CartLine, Product } from '../domain/types'
 import { useCart } from './useCart'
+
+// Restores every spy/mock after each test, so a failing test's
+// `console.error` spy (or similar) can never leak into a later test.
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 const croissant: Product = {
   id: 'p-croissant',
@@ -24,7 +31,12 @@ const cookie: Product = {
   archived: false,
 }
 
-const croissantLine: CartLine = { productId: 'p-croissant', name: 'Croissant', unitPrice: 5500, qty: 2 }
+const croissantLine: CartLine = {
+  productId: 'p-croissant',
+  name: 'Croissant',
+  unitPrice: 5500,
+  qty: 2,
+}
 
 describe('useCart', () => {
   it('starts empty', () => {
@@ -108,7 +120,7 @@ describe('useCart', () => {
 
   it('the try/catch in add is a last-resort guard: an unexpected throw from addProduct is caught and logged, never crashes', () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const addProductSpy = vi.spyOn(cartModule, 'addProduct').mockImplementation(() => {
+    vi.spyOn(cartModule, 'addProduct').mockImplementation(() => {
       throw new Error('unexpected bug')
     })
     const { result } = renderHook(() => useCart())
@@ -118,9 +130,6 @@ describe('useCart', () => {
 
     expect(result.current.lines).toBe(before)
     expect(errorSpy).toHaveBeenCalled()
-
-    addProductSpy.mockRestore()
-    errorSpy.mockRestore()
   })
 
   it('re-adding an existing line bumps qty at the original snapshot price even after the product is repriced to a non-integer', () => {
@@ -229,15 +238,13 @@ describe('useCart', () => {
   })
 
   it('with one invalid line present, lines stays the same reference across a rerender (the memo is stable)', () => {
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
     const corrupt: CartLine = { productId: '', name: 'Bad', unitPrice: 100, qty: 1 }
     const { result, rerender } = renderHook(() => useCart([croissantLine, corrupt]))
     const before = result.current.lines
 
     rerender()
     expect(result.current.lines).toBe(before)
-
-    errorSpy.mockRestore()
   })
 
   it('keeps action identities stable across rerenders', () => {
@@ -260,7 +267,12 @@ describe('useCart', () => {
 })
 
 describe('useCart with corrupt initial lines', () => {
-  const validLine: CartLine = { productId: 'p-croissant', name: 'Croissant', unitPrice: 5500, qty: 2 }
+  const validLine: CartLine = {
+    productId: 'p-croissant',
+    name: 'Croissant',
+    unitPrice: 5500,
+    qty: 2,
+  }
   const corruptLines: CartLine[] = [
     // empty productId
     { productId: '', name: 'Bad Id', unitPrice: 100, qty: 1 },
@@ -271,14 +283,12 @@ describe('useCart with corrupt initial lines', () => {
   ]
 
   it('exposes only the valid line, and total/count exclude the corrupt ones', () => {
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
     const { result } = renderHook(() => useCart([validLine, ...corruptLines]))
 
     expect(result.current.lines).toEqual([validLine])
     expect(result.current.total).toBe(11000)
     expect(result.current.count).toBe(2)
-
-    errorSpy.mockRestore()
   })
 
   it('logs each corrupt line exactly once, across rerenders and actions', () => {
@@ -293,12 +303,10 @@ describe('useCart with corrupt initial lines', () => {
     act(() => result.current.decrement('p-croissant'))
 
     expect(errorSpy).toHaveBeenCalledTimes(3)
-
-    errorSpy.mockRestore()
   })
 
   it('increment, decrement and clear still work with corrupt lines present', () => {
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
     const { result } = renderHook(() => useCart([validLine, ...corruptLines]))
 
     act(() => result.current.increment('p-croissant'))
@@ -313,21 +321,29 @@ describe('useCart with corrupt initial lines', () => {
     expect(result.current.lines).toEqual([])
     expect(result.current.total).toBe(0)
     expect(result.current.count).toBe(0)
-
-    errorSpy.mockRestore()
   })
 })
 
 describe('useCart actions operate on valid, de-duplicated lines only (fix round 1)', () => {
   it('a hidden invalid same-id line is never resurrected or cross-mutated by "+"', () => {
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
     // Before the fix, domain `increment` maps over *every* line matching
     // productId, so this raw qty:0 line (invalid — qty must be >= 1) would
     // get bumped to qty:1 (becoming "valid") right alongside the real
     // qty:3 line bumping to qty:4 — total jumps to 5*5500=27500 (฿275)
     // instead of the correct 4*5500=22000 (฿220).
-    const zeroQtyLine: CartLine = { productId: 'p-croissant', name: 'Croissant', unitPrice: 5500, qty: 0 }
-    const threeQtyLine: CartLine = { productId: 'p-croissant', name: 'Croissant', unitPrice: 5500, qty: 3 }
+    const zeroQtyLine: CartLine = {
+      productId: 'p-croissant',
+      name: 'Croissant',
+      unitPrice: 5500,
+      qty: 0,
+    }
+    const threeQtyLine: CartLine = {
+      productId: 'p-croissant',
+      name: 'Croissant',
+      unitPrice: 5500,
+      qty: 3,
+    }
 
     const { result } = renderHook(() => useCart([zeroQtyLine, threeQtyLine]))
     expect(result.current.total).toBe(16500)
@@ -338,18 +354,26 @@ describe('useCart actions operate on valid, de-duplicated lines only (fix round 
       { productId: 'p-croissant', name: 'Croissant', unitPrice: 5500, qty: 4 },
     ])
     expect(result.current.total).toBe(22000)
-
-    errorSpy.mockRestore()
   })
 
   it('a hidden invalid same-id line is never used to wipe out the real line via "-"', () => {
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
     // Before the fix, domain `decrement` does `lines.find(...)`, which
     // matches this raw qty:0 line first (it's invalid, but decrement
     // doesn't know that), sees qty <= 1, and filters out *every* line with
     // that productId — deleting the real qty:3 line as collateral damage.
-    const zeroQtyLine: CartLine = { productId: 'p-croissant', name: 'Croissant', unitPrice: 5500, qty: 0 }
-    const threeQtyLine: CartLine = { productId: 'p-croissant', name: 'Croissant', unitPrice: 5500, qty: 3 }
+    const zeroQtyLine: CartLine = {
+      productId: 'p-croissant',
+      name: 'Croissant',
+      unitPrice: 5500,
+      qty: 0,
+    }
+    const threeQtyLine: CartLine = {
+      productId: 'p-croissant',
+      name: 'Croissant',
+      unitPrice: 5500,
+      qty: 3,
+    }
 
     const { result } = renderHook(() => useCart([zeroQtyLine, threeQtyLine]))
 
@@ -358,8 +382,6 @@ describe('useCart actions operate on valid, de-duplicated lines only (fix round 
     expect(result.current.lines).toEqual([
       { productId: 'p-croissant', name: 'Croissant', unitPrice: 5500, qty: 2 },
     ])
-
-    errorSpy.mockRestore()
   })
 
   it.each([
@@ -374,23 +396,24 @@ describe('useCart actions operate on valid, de-duplicated lines only (fix round 
       })(),
     ],
     ['a line with a BigInt field', { productId: 'p-big', name: 'Big', unitPrice: 100, qty: 10n }],
-  ])('a raw line that is %s never crashes + or -, and the good line still steps correctly', (_label, badRaw) => {
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const { result } = renderHook(() => useCart([croissantLine, badRaw as unknown as CartLine]))
+  ])(
+    'a raw line that is %s never crashes + or -, and the good line still steps correctly',
+    (_label, badRaw) => {
+      vi.spyOn(console, 'error').mockImplementation(() => {})
+      const { result } = renderHook(() => useCart([croissantLine, badRaw as unknown as CartLine]))
 
-    expect(result.current.lines).toEqual([croissantLine])
+      expect(result.current.lines).toEqual([croissantLine])
 
-    expect(() => act(() => result.current.increment('p-croissant'))).not.toThrow()
-    expect(result.current.lines).toEqual([{ ...croissantLine, qty: 3 }])
+      expect(() => act(() => result.current.increment('p-croissant'))).not.toThrow()
+      expect(result.current.lines).toEqual([{ ...croissantLine, qty: 3 }])
 
-    expect(() => act(() => result.current.decrement('p-croissant'))).not.toThrow()
-    expect(result.current.lines).toEqual([croissantLine])
-
-    errorSpy.mockRestore()
-  })
+      expect(() => act(() => result.current.decrement('p-croissant'))).not.toThrow()
+      expect(result.current.lines).toEqual([croissantLine])
+    },
+  )
 
   it('a string qty ("2") line is invalid and stays out of lines through + and - (no coercion resurrection)', () => {
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
     const stringQtyLine = {
       productId: 'p-bad-qty',
       name: 'Bad Qty',
@@ -408,8 +431,6 @@ describe('useCart actions operate on valid, de-duplicated lines only (fix round 
     act(() => result.current.decrement('p-bad-qty'))
     expect(result.current.lines.find((l) => l.productId === 'p-bad-qty')).toBeUndefined()
     expect(result.current.lines).toEqual([croissantLine])
-
-    errorSpy.mockRestore()
   })
 
   it('two valid lines sharing a productId: only the first is exposed, and "+" bumps only that one', () => {
@@ -427,13 +448,11 @@ describe('useCart actions operate on valid, de-duplicated lines only (fix round 
 
     act(() => result.current.increment('p-croissant'))
     expect(result.current.lines).toEqual([{ ...croissantLine, qty: 3 }])
-
-    errorSpy.mockRestore()
   })
 })
 
 describe('useCart total overflow guard', () => {
-  it('falls back to 0 and logs once when the cart total would exceed Number.MAX_SAFE_INTEGER', () => {
+  it('an overflowing second line is hidden (not a ฿0 fallback): only the first line is exposed, total is exact, and the second logs exactly once even under StrictMode, with no extra log on rerender or a "+" tap on the first line', () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const hugeLineA: CartLine = {
       productId: 'p-huge-a',
@@ -448,13 +467,29 @@ describe('useCart total overflow guard', () => {
       qty: 1,
     }
 
-    const { result } = renderHook(() => useCart([hugeLineA, hugeLineB]))
+    const { result, rerender } = renderHook(() => useCart([hugeLineA, hugeLineB]), {
+      wrapper: StrictMode,
+    })
 
-    expect(result.current.lines).toEqual([hugeLineA, hugeLineB])
-    expect(result.current.total).toBe(0)
-    expect(errorSpy).toHaveBeenCalledTimes(1)
-    expect(errorSpy.mock.calls[0][0]).toContain('not a safe integer')
+    // Only the first line is kept — the second would push the running
+    // total past Number.MAX_SAFE_INTEGER, so partitionCartLines treats it
+    // as invalid, exactly like a duplicate productId.
+    expect(result.current.lines).toEqual([hugeLineA])
+    expect(result.current.total).toBe(Number.MAX_SAFE_INTEGER)
 
-    errorSpy.mockRestore()
+    const logsForSecond = () =>
+      errorSpy.mock.calls.filter(
+        (args) => typeof args[0] === 'string' && args[0].includes('p-huge-b'),
+      ).length
+    expect(logsForSecond()).toBe(1)
+
+    rerender()
+    expect(logsForSecond()).toBe(1)
+
+    // Bumping the first line would itself overflow (2 * MAX_SAFE_INTEGER),
+    // so increment (N2) is a no-op — no new invalid line, no new log.
+    act(() => result.current.increment('p-huge-a'))
+    expect(result.current.lines).toEqual([hugeLineA])
+    expect(logsForSecond()).toBe(1)
   })
 })
