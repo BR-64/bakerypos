@@ -50,10 +50,15 @@ Files already in place from the scaffold: `src/domain/{types,money}.ts` (+tests)
       (same reference when none are invalid) and computes `count` from them; every action
       (`add`/`increment`/`decrement`/`remove`) runs on that same cleaned subset, never on the raw
       state, so a hidden invalid raw line (e.g. a stray `qty: 0` duplicate) can never be silently
-      resurrected or cross-mutated by `+`/`-`. `total` guards against a validated-but-pathological
-      sum that overflows `Number.MAX_SAFE_INTEGER`: falls back to 0 and logs once rather than
-      showing a wrapped/imprecise number. Each invalid or duplicate line is logged once per
-      productId via `src/hooks/useLogInvalidOnce.ts` (extracted from `SellScreen`);
+      resurrected or cross-mutated by `+`/`-`. `partitionCartLines` also keeps a running total as
+      it builds `valid`; a line that would push that running total past `Number.MAX_SAFE_INTEGER`
+      is itself treated as invalid and skipped (same "first occurrence(s) win" rule as duplicates)
+      instead of being counted — so `total` (plain `cartTotal(lines)`) is always the exact sum of
+      the visible lines, never a fallback or an approximation of money. `increment` is a no-op
+      (same reference) if bumping a line would make its own `unitPrice * qty` unsafe or would push
+      the cart total past `Number.MAX_SAFE_INTEGER`, so "+" can never be what makes a line or the
+      cart invalid. Each invalid or duplicate or overflow-causing line is logged once per productId
+      via `src/hooks/useLogInvalidOnce.ts` (extracted from `SellScreen`);
       `lineTotal`/`cartTotal` stay unguarded — callers pass validated lines. `src/navigation.ts`:
       `SCREENS`, `Screen` union (sell/cart/cash/promptpay/orders/report/admin), `SCREEN_TITLES`,
       `HOME_SCREEN`, `ScreenProps { cart, navigate, database }`. `App.tsx` (optional `database`
@@ -70,9 +75,10 @@ Files already in place from the scaffold: `src/domain/{types,money}.ts` (+tests)
       `.screen`/`.bottom-bar` CSS extracted from `.sell-screen`/`.cart-bar`. `src/screens/
       CartScreen.tsx` (no Dexie reads): "Back to Sell"; lines with snapshot name, muted unit
       price, −/qty/+ steppers ≥ 48px labelled "Remove one X"/"Add one X", line total via
-      `lineTotal`; inline clear-confirm ("Keep" replaces "Clear cart" in place and takes focus,
-      plus "Yes, clear", which clears and returns to Sell; text is "Remove all N item?"/"items?"
-      singular/plural; Clear disabled when empty; `confirming` is reset during render — not in an
+      `lineTotal`; inline clear-confirm (a labelled prompt takes "Clear cart"'s place, showing
+      "Remove all N item?"/"items?" singular/plural, with "Keep" — which takes focus and sits
+      beside a danger-styled "Yes, clear", which clears and returns to Sell — where "Clear cart"
+      was; Clear disabled when empty; `confirming` is reset during render — not in an
       effect — whenever the cart is empty, so it can never silently resurface if the cart is
       cleared and refilled from outside this screen while it's open); empty state "Cart is
       empty."; pinned bottom bar with the total and big Cash / PromptPay buttons that navigate in
@@ -82,9 +88,10 @@ Files already in place from the scaffold: `src/domain/{types,money}.ts` (+tests)
       _Accept:_ Testing Library tests around the real `useCart` — stepping a line to 0 removes
       it and the total updates (฿110 → ฿55 → ฿0, empty state, Cash/PromptPay disabled); Clear
       needs the confirm and "Keep" leaves the cart untouched; Cash/PromptPay call `navigate` in
-      one tap; corrupt and duplicate-productId lines are skipped, excluded from the total and
-      logged once, and never crash `+`/`-` even for a `null`/circular/BigInt raw line; a total
-      that would overflow falls back to 0 and logs once; `fetch` is never called; an App test on
+      one tap; corrupt, duplicate-productId, and total-overflowing lines are skipped, excluded
+      from the total and logged once, and never crash `+`/`-` even for a `null`/circular/BigInt
+      raw line; "+" is a no-op rather than ever making a line or the cart total unsafe; `fetch`
+      is never called; an App test on
       a fresh `PosDatabase` goes Sell → Cart → Cash placeholder → Sell with the cart intact, and
       a forced error in the Cart screen shows Try again/Back to Sell/Reload, with the cart intact
       after either recovery path and no Back to Sell on Sell's own boundary.
