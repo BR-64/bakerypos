@@ -89,6 +89,25 @@ describe('completeOrder', () => {
     // Sanity check the repriced value was never used.
     expect(stored?.total).not.toBe(cartTotal([{ ...lines[0], unitPrice: repriced.price }]))
   })
+
+  it('repricing a product after completeOrder does not change the stored order', async () => {
+    const seedProduct = seedProducts.find((p) => p.id === 'p-croissant')!
+    await database.products.add(seedProduct)
+    const originalPrice = seedProduct.price
+
+    const lines = addProduct([], seedProduct)
+    const order = await completeOrder(
+      lines,
+      { method: 'cash', tendered: cartTotal(lines), change: 0 },
+      database,
+    )
+
+    await database.products.update(seedProduct.id, { price: originalPrice + 10000 })
+
+    const stored = await database.orders.get(order.id)
+    expect(stored?.lines[0].unitPrice).toBe(originalPrice)
+    expect(stored?.total).toBe(originalPrice)
+  })
 })
 
 describe('voidOrder', () => {
