@@ -39,7 +39,7 @@ Files already in place from the scaffold: `src/domain/{types,money}.ts` (+tests)
       the product query rejects the cart bar stays visible with its total and "Try again"
       recovers once the query succeeds.
 
-- [ ] **3. Cart screen.** `src/domain/cart.ts` `isValidCartLine(line)` (non-null object,
+- [x] **3. Cart screen.** `src/domain/cart.ts` `isValidCartLine(line)` (non-null object,
       non-empty `productId` and trimmed `name`, `unitPrice` a non-negative integer, `qty` an
       integer ≥ 1, `unitPrice * qty` a safe integer) and `partitionCartLines(lines)`.
       `useCart(initialLines = [])` exposes only valid `lines` (same reference when none are
