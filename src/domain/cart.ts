@@ -8,19 +8,40 @@ import type { CartLine, Product } from './types'
  *
  * Archived or out-of-stock products are a no-op (returns `lines` unchanged,
  * same reference) rather than throwing — the grid should already prevent
- * tapping them, but a stale tile shouldn't crash the sale. A non-integer
- * price is a data bug, not a stock state, so that throws.
+ * tapping them, but a stale tile shouldn't crash the sale.
+ *
+ * The price is only validated when it would be snapshotted onto a *new*
+ * line: bumping an existing line reuses its stored snapshot price, so a
+ * product that has since been repriced to something invalid must not stop
+ * the bump. A non-integer price on a genuinely new line is a data bug, so
+ * that still throws — callers that can't tolerate a throw (e.g. inside a
+ * React state updater) should check `canAddProduct` first.
  */
 export function addProduct(lines: CartLine[], product: Product): CartLine[] {
   if (product.archived || product.outOfStock) return lines
-  if (!Number.isInteger(product.price)) {
-    throw new Error('Product price must be integer satang')
-  }
   const existing = lines.find((l) => l.productId === product.id)
   if (existing) {
     return lines.map((l) => (l.productId === product.id ? { ...l, qty: l.qty + 1 } : l))
   }
+  if (!Number.isInteger(product.price)) {
+    throw new Error('Product price must be integer satang')
+  }
   return [...lines, { productId: product.id, name: product.name, unitPrice: product.price, qty: 1 }]
+}
+
+/**
+ * Whether `addProduct(lines, product)` is safe to call, i.e. it will not
+ * throw. Archived/out-of-stock products and products already in the cart
+ * are always safe (the latter reuses its snapshot price); a product that
+ * would start a new line is only safe if its current price is integer
+ * satang. Callers that must not throw mid-update (e.g. a React state
+ * updater) should check this first and skip the call otherwise.
+ */
+export function canAddProduct(lines: CartLine[], product: Product): boolean {
+  if (product.archived || product.outOfStock) return true
+  const existing = lines.some((l) => l.productId === product.id)
+  if (existing) return true
+  return Number.isInteger(product.price)
 }
 
 /**
