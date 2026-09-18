@@ -1,10 +1,16 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { StrictMode } from 'react'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { CartLine, Product } from '../domain/types'
 import { useCart } from '../hooks/useCart'
 import type { Screen } from '../navigation'
 import { CartScreen } from './CartScreen'
+
+// Restores every spy/mock after each test, so a failing test's
+// `console.error`/`fetch` spy can never leak into a later test.
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 /** Renders CartScreen with a real useCart(initial), the way App.tsx does. */
 function Harness({ initial, navigate }: { initial?: CartLine[]; navigate: (s: Screen) => void }) {
@@ -56,6 +62,20 @@ function SharedHarness({ initial }: { initial?: CartLine[] }) {
  */
 function totalText(): string | null {
   return document.querySelector('.cart-bottom-bar-total')?.textContent ?? null
+}
+
+/**
+ * Parses `formatBaht`'s display format (e.g. "฿9,007,199,254,740,991.50")
+ * back into integer satang, independent of any internal computation, so a
+ * test comparing "what's rendered" against "what's rendered" doesn't just
+ * compare the same in-memory number to itself.
+ */
+function parseBahtToSatang(text: string): number {
+  const negative = text.startsWith('-')
+  const body = text.replace(/^-/, '').replace('฿', '').replace(/,/g, '')
+  const [bahtStr, satangStr] = body.split('.')
+  const satang = Number(bahtStr) * 100 + (satangStr ? Number(satangStr) : 0)
+  return negative ? -satang : satang
 }
 
 describe('CartScreen', () => {
@@ -149,8 +169,6 @@ describe('CartScreen', () => {
     expect(screen.queryByText(/something went wrong/i)).not.toBeInTheDocument()
 
     expect(errorSpy).toHaveBeenCalledTimes(3)
-
-    errorSpy.mockRestore()
   })
 
   it('(f) never calls fetch', () => {
@@ -163,7 +181,6 @@ describe('CartScreen', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Clear cart' }))
 
     expect(fetchSpy).not.toHaveBeenCalled()
-    fetchSpy.mockRestore()
   })
 
   it('(g) under StrictMode, one + tap adds exactly 1', () => {
@@ -246,7 +263,36 @@ describe('CartScreen', () => {
       (args) => typeof args[0] === 'string' && args[0].toLowerCase().includes('same key'),
     )
     expect(duplicateKeyWarning).toBe(false)
+  })
 
-    errorSpy.mockRestore()
+  it('the bottom-bar total always equals the sum of the rendered line totals, even when an overflowing line is present and hidden', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const first: CartLine = {
+      productId: 'p-huge-a',
+      name: 'Huge A',
+      unitPrice: Number.MAX_SAFE_INTEGER - 20000,
+      qty: 1,
+    }
+    // Would push the running total past Number.MAX_SAFE_INTEGER on top of
+    // `first`, so partitionCartLines hides it — it must never be rendered
+    // or counted, in the line list or the bottom bar.
+    const overflowing: CartLine = {
+      productId: 'p-huge-b',
+      name: 'Huge B',
+      unitPrice: Number.MAX_SAFE_INTEGER,
+      qty: 1,
+    }
+
+    render(<Harness initial={[first, overflowing, croissantLine]} navigate={() => {}} />)
+
+    expect(screen.queryByText('Huge B')).not.toBeInTheDocument()
+
+    const renderedLineTotalsSum = Array.from(document.querySelectorAll('.cart-line-total')).reduce(
+      (sum, el) => sum + parseBahtToSatang(el.textContent ?? ''),
+      0,
+    )
+    const shownTotal = parseBahtToSatang((totalText() ?? '').replace('Total ', ''))
+
+    expect(shownTotal).toBe(renderedLineTotalsSum)
   })
 })
