@@ -12,21 +12,32 @@ Files already in place from the scaffold: `src/domain/{types,money}.ts` (+tests)
       _Accept:_ unit tests cover every function incl. decrement-to-zero removes the line; qty
       never goes negative.
 
-- [x] **2. Sell screen.** `src/db/products.ts` `sellableProducts(database = db)` (sorted by
-      `sortOrder`, archived filtered in JS, out-of-stock kept); `src/domain/categories.ts`
-      (`CATEGORY_ORDER`, `categoryLabel`, `visibleCategories`, `productsInCategory`, "All" tab);
-      components `ProductTile` (disabled + "Sold out" when out of stock; disabled + "Unavailable"
-      for invalid data), `CategoryTabs`, `CartBar` (count + `formatBaht(total)`, sticky, `onOpen`),
-      `ErrorBoundary` (reload fallback); `src/screens/SellScreen.tsx` using `useLiveQuery` with an
-      injectable `database` prop and a `cart: Pick<Cart, 'add' | 'count' | 'total'>` prop.
-      `App.tsx` calls `useCart()` once and passes it down. `useCart.add` never throws (try/catch
-      inside the updater). Tiles ≥ 88px, all other touch targets ≥ 48px. The Sell screen never
-      crashes on bad product data. No new dependencies, no schema change, no network.
+- [x] **2. Sell screen.** `src/db/products.ts` `sellableProducts(database = db)` (reads with
+      `toArray()` and sorts by `sortOrder` in JS — an indexed `orderBy` would silently drop a
+      record with a missing/non-numeric `sortOrder`; archived filtered with a strict `=== true`
+      check, out-of-stock kept); `src/domain/cart.ts` `partitionSellable(products)` splitting a
+      list into `sellable`/`invalid` via `isSellable` (checks id, name, price, sortOrder, and
+      strict boolean `archived`/`outOfStock`); `src/domain/categories.ts` (`CATEGORY_ORDER`,
+      `categoryLabel`, `visibleCategories`, `productsInCategory`, "All" tab). Components
+      `ProductTile` (disabled + "Sold out" when out of stock — invalid products are never passed
+      to it in the first place), `CategoryTabs`, `CartBar` (count + `formatBaht(total)`, sticky,
+      full-bleed, `onOpen`), `ErrorBoundary` (class component; fallback offers "Try again", which
+      remounts the failed subtree via a `key`, and "Reload" as a fallback to reloading the page).
+      `src/screens/SellScreen.tsx` uses `useLiveQuery` with an injectable `database` prop and a
+      `cart: Pick<Cart, 'add' | 'count' | 'total'>` prop; the cart bar is a sibling of the
+      query-consuming grid, not a child of it, so it stays visible through the loading state, the
+      empty-menu state, and a rejected product query. `App.tsx` calls `useCart()` once and passes
+      it down. `useCart.add` never throws (try/catch inside the updater, now a last-resort guard
+      since `addProduct` itself no longer throws for bad data). Tiles ≥ 88px, all other touch
+      targets ≥ 48px. Invalid product data is skipped and logged once per id, never shown and
+      never thrown. No new dependencies, no schema change, no network.
       _Accept:_ Testing Library test on a fresh `PosDatabase` — tapping an in-stock tile updates
       the bottom bar total (฿0 → ฿55 → ฿110); an out-of-stock tile is disabled and does not
       change it; archived products are not rendered; a category tab filters the grid; products
-      with invalid price/name/category render without crashing and cannot be added; `fetch` is
-      never called.
+      with an invalid price/name/category/sortOrder/archived/outOfStock are skipped (never
+      rendered) and logged once, while good products still work; `fetch` is never called; when
+      the product query rejects the cart bar stays visible with its total and "Try again"
+      recovers once the query succeeds.
 
 - [ ] **3. Cart screen.** `src/screens/CartScreen.tsx` with lines, steppers, clear-with-confirm,
       Cash and PromptPay buttons. Simple screen state in `App.tsx` (no router needed yet).
