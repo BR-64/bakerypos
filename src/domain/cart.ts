@@ -127,3 +127,56 @@ export function clear(): CartLine[] {
 export function itemCount(lines: CartLine[]): number {
   return lines.reduce((sum, l) => sum + l.qty, 0)
 }
+
+/**
+ * Whether `line` is well-formed enough to render and total. Cart lines are
+ * React state, not read back from Dexie like products, but CLAUDE.md's
+ * "never crash on invalid data" rule applies here too — a corrupt line
+ * (e.g. one seeded by a test, or reached via some future import/merge
+ * feature) must be skipped and logged, never thrown. `line` is typed as
+ * `unknown` rather than `CartLine` because the whole point is that it might
+ * not even be an object.
+ *
+ * - `line` is a non-null object (not an array, not a primitive)
+ * - `productId` is a non-empty string
+ * - `name` is a string that is non-empty after trimming
+ * - `unitPrice` is an integer >= 0 (satang; zero is a valid free item)
+ * - `qty` is an integer >= 1
+ * - `unitPrice * qty` is a safe integer (guards against silent overflow)
+ */
+export function isValidCartLine(line: unknown): line is CartLine {
+  if (typeof line !== 'object' || line === null || Array.isArray(line)) return false
+  const { productId, name, unitPrice, qty } = line as Record<string, unknown>
+  return (
+    typeof productId === 'string' &&
+    productId.length > 0 &&
+    typeof name === 'string' &&
+    name.trim().length > 0 &&
+    Number.isInteger(unitPrice) &&
+    (unitPrice as number) >= 0 &&
+    Number.isInteger(qty) &&
+    (qty as number) >= 1 &&
+    Number.isSafeInteger((unitPrice as number) * (qty as number))
+  )
+}
+
+export interface PartitionedCartLines {
+  /** Well-formed lines, safe to render and total. */
+  valid: CartLine[]
+  /** Invalid records — never rendered, only logged (see `isValidCartLine`). */
+  invalid: CartLine[]
+}
+
+/**
+ * Splits `lines` into the well-formed ones and the invalid ones, keeping
+ * input order within each group. See `useCart`, which exposes only `valid`
+ * and logs each `invalid` line once.
+ */
+export function partitionCartLines(lines: CartLine[]): PartitionedCartLines {
+  const valid: CartLine[] = []
+  const invalid: CartLine[] = []
+  for (const line of lines) {
+    ;(isValidCartLine(line) ? valid : invalid).push(line)
+  }
+  return { valid, invalid }
+}

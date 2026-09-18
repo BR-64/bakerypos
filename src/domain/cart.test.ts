@@ -5,7 +5,9 @@ import {
   decrement,
   increment,
   isSellable,
+  isValidCartLine,
   itemCount,
+  partitionCartLines,
   partitionSellable,
   remove,
 } from './cart'
@@ -455,5 +457,92 @@ describe('cartTotal of a mixed cart', () => {
     const lines = addProduct(addProduct(addProduct([], croissant), croissant), cookie)
     expect(itemCount(lines)).toBe(3)
     expect(cartTotal(lines)).toBe(15000)
+  })
+})
+
+const croissantLine: CartLine = { productId: 'p-croissant', name: 'Croissant', unitPrice: 5500, qty: 2 }
+
+describe('isValidCartLine', () => {
+  it('is true for a well-formed line', () => {
+    expect(isValidCartLine(croissantLine)).toBe(true)
+  })
+
+  it('is false for null', () => {
+    expect(isValidCartLine(null)).toBe(false)
+  })
+
+  it('is false for a non-object value', () => {
+    expect(isValidCartLine('not a line')).toBe(false)
+    expect(isValidCartLine(42)).toBe(false)
+    expect(isValidCartLine(undefined)).toBe(false)
+  })
+
+  it('is false for a missing productId', () => {
+    const { productId: _productId, ...rest } = croissantLine
+    expect(isValidCartLine(rest)).toBe(false)
+  })
+
+  it('is false for an empty productId', () => {
+    expect(isValidCartLine({ ...croissantLine, productId: '' })).toBe(false)
+  })
+
+  it('is false for a blank (whitespace-only) name', () => {
+    expect(isValidCartLine({ ...croissantLine, name: '   ' })).toBe(false)
+  })
+
+  it('is false for a non-integer unitPrice (55.5)', () => {
+    expect(isValidCartLine({ ...croissantLine, unitPrice: 55.5 })).toBe(false)
+  })
+
+  it('is false for a negative unitPrice (-1)', () => {
+    expect(isValidCartLine({ ...croissantLine, unitPrice: -1 })).toBe(false)
+  })
+
+  it('is false for a NaN unitPrice', () => {
+    expect(isValidCartLine({ ...croissantLine, unitPrice: NaN })).toBe(false)
+  })
+
+  it('is false for a string unitPrice ("5500")', () => {
+    expect(isValidCartLine({ ...croissantLine, unitPrice: '5500' })).toBe(false)
+  })
+
+  it('is false for qty 0', () => {
+    expect(isValidCartLine({ ...croissantLine, qty: 0 })).toBe(false)
+  })
+
+  it('is false for a negative qty (-1)', () => {
+    expect(isValidCartLine({ ...croissantLine, qty: -1 })).toBe(false)
+  })
+
+  it('is false for a non-integer qty (1.5)', () => {
+    expect(isValidCartLine({ ...croissantLine, qty: 1.5 })).toBe(false)
+  })
+
+  it('is false for a NaN qty', () => {
+    expect(isValidCartLine({ ...croissantLine, qty: NaN })).toBe(false)
+  })
+
+  it('is false when unitPrice * qty is not a safe integer', () => {
+    expect(
+      isValidCartLine({ ...croissantLine, unitPrice: Number.MAX_SAFE_INTEGER, qty: 2 }),
+    ).toBe(false)
+  })
+
+  it('is true for a zero unitPrice (free item)', () => {
+    expect(isValidCartLine({ ...croissantLine, unitPrice: 0 })).toBe(true)
+  })
+})
+
+describe('partitionCartLines', () => {
+  it('splits well-formed lines into valid and invalid ones, preserving order', () => {
+    const cookieLine: CartLine = { productId: 'p-cookie', name: 'Cookie', unitPrice: 4000, qty: 1 }
+    const badLine = { ...croissantLine, productId: '' }
+    const { valid, invalid } = partitionCartLines([croissantLine, badLine, cookieLine])
+    expect(valid).toEqual([croissantLine, cookieLine])
+    expect(invalid).toEqual([badLine])
+  })
+
+  it('returns empty arrays for no lines', () => {
+    expect(partitionCartLines([])).toEqual({ valid: [], invalid: [] })
   })
 })
