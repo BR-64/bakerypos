@@ -39,9 +39,35 @@ Files already in place from the scaffold: `src/domain/{types,money}.ts` (+tests)
       the product query rejects the cart bar stays visible with its total and "Try again"
       recovers once the query succeeds.
 
-- [ ] **3. Cart screen.** `src/screens/CartScreen.tsx` with lines, steppers, clear-with-confirm,
-      Cash and PromptPay buttons. Simple screen state in `App.tsx` (no router needed yet).
-      _Accept:_ test — stepping a line to 0 removes it; total updates.
+- [ ] **3. Cart screen.** `src/domain/cart.ts` `isValidCartLine(line)` (non-null object,
+      non-empty `productId` and trimmed `name`, `unitPrice` a non-negative integer, `qty` an
+      integer ≥ 1, `unitPrice * qty` a safe integer) and `partitionCartLines(lines)`.
+      `useCart(initialLines = [])` exposes only valid `lines` (same reference when none are
+      invalid) and computes `total`/`count` from them, logging each invalid line once per
+      productId via `src/hooks/useLogInvalidOnce.ts` (extracted from `SellScreen`);
+      `lineTotal`/`cartTotal` stay unguarded — callers pass validated lines. `src/navigation.ts`:
+      `SCREENS`, `Screen` union (sell/cart/cash/promptpay/orders/report/admin), `SCREEN_TITLES`,
+      `ScreenProps { cart, navigate, database }`. `App.tsx` (optional `database` prop) keeps
+      `useState<Screen>('sell')` and a non-exported `screens: Record<Screen, (props:
+      ScreenProps) => ReactNode>` registry; each screen sits in an `ErrorBoundary` keyed by
+      screen + retry count, with a new optional "Back to Sell" (`onBack`) between "Try again" and
+      "Reload", since Reload loses the in-memory cart. `PlaceholderScreen` (title, "Coming soon",
+      "Back to Sell") fills cash/promptpay/orders/report/admin; tasks 4–7 each swap one registry
+      line. Shared `.screen`/`.bottom-bar` CSS extracted from `.sell-screen`/`.cart-bar`.
+      `src/screens/CartScreen.tsx` (no Dexie reads): "Back to Sell"; lines with snapshot name,
+      muted unit price, −/qty/+ steppers ≥ 48px labelled "Remove one X"/"Add one X", line total
+      via `lineTotal`; inline clear-confirm ("Keep" replaces "Clear cart" in place and takes
+      focus, plus "Yes, clear", which clears and returns to Sell; Clear disabled when empty;
+      confirm closes if the cart empties); empty state "Cart is empty."; pinned bottom bar with
+      the total and big Cash / PromptPay buttons that navigate in one tap, disabled when empty.
+      `+` ignores current stock state (task 1 decision). Sell's `CartBar` gets `onOpenCart`; the
+      Sell tab resets to All. No new dependencies, no schema change, no network.
+      _Accept:_ Testing Library tests around the real `useCart` — stepping a line to 0 removes
+      it and the total updates (฿110 → ฿55 → ฿0, empty state, Cash/PromptPay disabled); Clear
+      needs the confirm and "Keep" leaves the cart untouched; Cash/PromptPay call `navigate` in
+      one tap; corrupt lines are skipped, excluded from the total and logged once; `fetch` is
+      never called; an App test on a fresh `PosDatabase` goes Sell → Cart → Cash placeholder →
+      Sell with the cart intact.
 
 - [ ] **4. Cash checkout.** `src/screens/CashScreen.tsx`: quick-tender buttons from
       `quickTenderOptions`, keypad, change due, Done calls `completeOrder`. Returns to Sell with
