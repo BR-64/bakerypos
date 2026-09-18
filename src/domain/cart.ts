@@ -15,7 +15,7 @@ import type { CartLine, Product } from './types'
  * product that has since been repriced to something invalid must not stop
  * the bump. A non-integer price on a genuinely new line is a data bug, so
  * that still throws — callers that can't tolerate a throw (e.g. inside a
- * React state updater) should check `canAddProduct` first.
+ * React state updater) should catch it there instead.
  */
 export function addProduct(lines: CartLine[], product: Product): CartLine[] {
   if (product.archived || product.outOfStock) return lines
@@ -27,21 +27,6 @@ export function addProduct(lines: CartLine[], product: Product): CartLine[] {
     throw new Error('Product price must be integer satang')
   }
   return [...lines, { productId: product.id, name: product.name, unitPrice: product.price, qty: 1 }]
-}
-
-/**
- * Whether `addProduct(lines, product)` is safe to call, i.e. it will not
- * throw. Archived/out-of-stock products and products already in the cart
- * are always safe (the latter reuses its snapshot price); a product that
- * would start a new line is only safe if its current price is integer
- * satang. Callers that must not throw mid-update (e.g. a React state
- * updater) should check this first and skip the call otherwise.
- */
-export function canAddProduct(lines: CartLine[], product: Product): boolean {
-  if (product.archived || product.outOfStock) return true
-  const existing = lines.some((l) => l.productId === product.id)
-  if (existing) return true
-  return Number.isInteger(product.price)
 }
 
 /**

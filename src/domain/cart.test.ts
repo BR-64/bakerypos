@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { addProduct, canAddProduct, clear, decrement, increment, itemCount, remove } from './cart'
+import { addProduct, clear, decrement, increment, itemCount, remove } from './cart'
 import { cartTotal } from './money'
 import type { CartLine, Product } from './types'
 
@@ -135,26 +135,6 @@ describe('addProduct', () => {
     expect(lines).toEqual([
       { productId: 'p-croissant', name: 'Croissant', unitPrice: 5500, qty: 2 },
     ])
-  })
-})
-
-describe('canAddProduct', () => {
-  it('is true for a product not yet in the cart with an integer price', () => {
-    expect(canAddProduct([], croissant)).toBe(true)
-  })
-
-  it('is false for a product not yet in the cart with a non-integer price', () => {
-    expect(canAddProduct([], { ...croissant, price: 55.5 })).toBe(false)
-  })
-
-  it('is true for a product already in the cart, even with a non-integer price', () => {
-    const lines = [{ productId: 'p-croissant', name: 'Croissant', unitPrice: 5500, qty: 1 }]
-    expect(canAddProduct(lines, { ...croissant, price: 55.5 })).toBe(true)
-  })
-
-  it('is true for an archived or out-of-stock product regardless of price', () => {
-    expect(canAddProduct([], { ...croissant, archived: true, price: 55.5 })).toBe(true)
-    expect(canAddProduct([], { ...croissant, outOfStock: true, price: 55.5 })).toBe(true)
   })
 })
 

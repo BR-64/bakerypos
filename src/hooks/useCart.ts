@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import * as cart from '../domain/cart'
 import { cartTotal } from '../domain/money'
 import type { CartLine, Product } from '../domain/types'
@@ -10,57 +10,41 @@ import type { CartLine, Product } from '../domain/types'
  */
 export function useCart() {
   const [lines, setLines] = useState<CartLine[]>([])
-  // Mirrors `lines` for `add` to read synchronously, updated alongside every
-  // `setLines` call below (never read or written during render itself).
-  // `addProduct`'s throw for an invalid new-line price must never happen
-  // inside a `setLines` updater — React can run updaters during render, and
-  // there is no error boundary, so that throw would unmount the whole app
-  // mid-sale. Checking `canAddProduct` against this ref before calling
-  // `setLines` keeps `add` itself throw-free.
-  const linesRef = useRef(lines)
 
+  // `addProduct` throws for a genuinely new line with a non-integer price.
+  // React can run updaters during render (e.g. under StrictMode or when
+  // actions are batched), and there is no error boundary around a state
+  // updater's own execution, so that throw must never escape here — catch
+  // it inside the updater itself rather than pre-checking a ref, which can
+  // go stale when several actions run in the same batch.
   const add = useCallback((product: Product) => {
-    if (!cart.canAddProduct(linesRef.current, product)) {
-      console.error(
-        `useCart.add: refusing to add product "${product.id}" — price ${product.price} is not integer satang`,
-      )
-      return
-    }
     setLines((prev) => {
-      const next = cart.addProduct(prev, product)
-      linesRef.current = next
-      return next
+      try {
+        return cart.addProduct(prev, product)
+      } catch (e) {
+        console.error(
+          `useCart.add: refusing to add product "${product.id}" — price ${product.price} is not integer satang`,
+          e,
+        )
+        return prev
+      }
     })
   }, [])
 
   const increment = useCallback((productId: string) => {
-    setLines((prev) => {
-      const next = cart.increment(prev, productId)
-      linesRef.current = next
-      return next
-    })
+    setLines((prev) => cart.increment(prev, productId))
   }, [])
 
   const decrement = useCallback((productId: string) => {
-    setLines((prev) => {
-      const next = cart.decrement(prev, productId)
-      linesRef.current = next
-      return next
-    })
+    setLines((prev) => cart.decrement(prev, productId))
   }, [])
 
   const remove = useCallback((productId: string) => {
-    setLines((prev) => {
-      const next = cart.remove(prev, productId)
-      linesRef.current = next
-      return next
-    })
+    setLines((prev) => cart.remove(prev, productId))
   }, [])
 
   const clear = useCallback(() => {
-    const next = cart.clear()
-    linesRef.current = next
-    setLines(next)
+    setLines(cart.clear())
   }, [])
 
   const total = useMemo(() => cartTotal(lines), [lines])

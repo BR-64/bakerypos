@@ -115,6 +115,24 @@ describe('useCart', () => {
     expect(result.current.total).toBe(11000)
   })
 
+  it('never throws when add/remove/add are batched in one act and a stale ref would otherwise be wrong', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { result } = renderHook(() => useCart())
+
+    expect(() => {
+      act(() => {
+        result.current.add(croissant)
+        result.current.remove('p-croissant')
+        result.current.add({ ...croissant, price: 55.5 })
+      })
+    }).not.toThrow()
+
+    expect(result.current.lines).toEqual([])
+    expect(errorSpy).toHaveBeenCalled()
+
+    errorSpy.mockRestore()
+  })
+
   it('keeps action identities stable across rerenders', () => {
     const { result, rerender } = renderHook(() => useCart())
     const first = {
