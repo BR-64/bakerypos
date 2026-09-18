@@ -19,7 +19,7 @@ export function CartBar({ count, total, onOpen }: CartBarProps) {
   return (
     <button
       type="button"
-      className="cart-bar"
+      className="cart-bar bottom-bar"
       onClick={onOpen}
       disabled={count === 0 || !onOpen}
       aria-label={label}

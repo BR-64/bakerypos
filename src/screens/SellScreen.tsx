@@ -41,7 +41,7 @@ export function SellScreen({ cart, onOpenCart, database = db }: SellScreenProps)
   const [retryKey, setRetryKey] = useState(0)
 
   return (
-    <main className="app sell-screen">
+    <main className="app screen sell-screen">
       <ErrorBoundary key={retryKey} onRetry={() => setRetryKey((k) => k + 1)}>
         <ProductGrid cart={cart} database={database} />
       </ErrorBoundary>
