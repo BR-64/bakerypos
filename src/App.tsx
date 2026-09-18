@@ -1,39 +1,21 @@
-import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect } from 'react'
-import { db } from './db/db'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import { seedIfEmpty } from './db/seed'
-import { formatBaht } from './domain/money'
+import { useCart } from './hooks/useCart'
+import { SellScreen } from './screens/SellScreen'
 
-/**
- * Placeholder shell. PLAN.md task 2 replaces this with the real
- * ProductGrid + Cart screens. It exists so `npm run dev` shows something
- * and proves Dexie + seed data work on the device.
- */
 export default function App() {
   useEffect(() => {
     void seedIfEmpty()
   }, [])
 
-  const products = useLiveQuery(() =>
-    // Booleans are not indexable in IndexedDB, so filter in JS after the index scan.
-    db.products
-      .orderBy('sortOrder')
-      .filter((p) => !p.archived)
-      .toArray(),
-  )
+  // Call useCart() once here and pass it down — calling it again in a
+  // screen would create a second, independent cart.
+  const cart = useCart()
 
   return (
-    <main className="app">
-      <h1>Bakery POS</h1>
-      <p className="muted">Scaffold running. Products loaded from local DB:</p>
-      <ul className="grid">
-        {(products ?? []).map((p) => (
-          <li key={p.id} className="tile">
-            <span>{p.name}</span>
-            <strong>{formatBaht(p.price)}</strong>
-          </li>
-        ))}
-      </ul>
-    </main>
+    <ErrorBoundary>
+      <SellScreen cart={cart} />
+    </ErrorBoundary>
   )
 }
