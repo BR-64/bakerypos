@@ -1,5 +1,5 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { CartBar } from '../components/CartBar'
 import { CategoryTabs } from '../components/CategoryTabs'
 import { ErrorBoundary } from '../components/ErrorBoundary'
@@ -11,6 +11,7 @@ import { productsInCategory, visibleCategories, type CategoryTab } from '../doma
 import { safeString } from '../domain/log'
 import type { Product } from '../domain/types'
 import type { Cart } from '../hooks/useCart'
+import { useLogInvalidOnce } from '../hooks/useLogInvalidOnce'
 
 export interface SellScreenProps {
   cart: Pick<Cart, 'add' | 'count' | 'total'>
@@ -55,32 +56,22 @@ interface ProductGridProps {
 }
 
 /**
- * Logs each invalid product once (keyed by id, or by a stringified copy of
- * the record when even the id is missing), no matter how many times this
- * runs — `partitionSellable` returns a fresh `invalid` array on every
- * emission/render, so the actual de-duplication lives in `loggedKeys`,
- * which persists across renders via a ref. Runs in an effect, never in the
- * render body itself, per CLAUDE.md: invalid data is "skipped and logged,
- * never thrown" — and logging is a side effect, not something to do while
- * rendering.
+ * Dedup key for an invalid product: its id when present, otherwise a
+ * stringified copy of the whole record (so even a product missing its id
+ * still gets a stable-ish key instead of colliding with every other
+ * id-less record).
  */
-function useLogInvalidProductsOnce(invalid: Product[]): void {
-  const loggedKeys = useRef<Set<string>>(new Set())
+function invalidProductKey(product: Product): string {
+  return typeof product.id === 'string' && product.id.length > 0 ? product.id : safeString(product)
+}
 
-  useEffect(() => {
-    for (const product of invalid) {
-      const key =
-        typeof product.id === 'string' && product.id.length > 0 ? product.id : safeString(product)
-      if (loggedKeys.current.has(key)) continue
-      loggedKeys.current.add(key)
-      console.error(
-        `SellScreen: skipping invalid product ${key} — ` +
-          `id=${safeString(product.id)}, name=${safeString(product.name)}, ` +
-          `price=${safeString(product.price)}, sortOrder=${safeString(product.sortOrder)}, ` +
-          `archived=${safeString(product.archived)}, outOfStock=${safeString(product.outOfStock)}`,
-      )
-    }
-  }, [invalid])
+function describeInvalidProduct(product: Product): string {
+  return (
+    `SellScreen: skipping invalid product ${invalidProductKey(product)} — ` +
+    `id=${safeString(product.id)}, name=${safeString(product.name)}, ` +
+    `price=${safeString(product.price)}, sortOrder=${safeString(product.sortOrder)}, ` +
+    `archived=${safeString(product.archived)}, outOfStock=${safeString(product.outOfStock)}`
+  )
 }
 
 function ProductGrid({ cart, database }: ProductGridProps) {
@@ -88,7 +79,7 @@ function ProductGrid({ cart, database }: ProductGridProps) {
   const products = useLiveQuery(() => sellableProducts(database), [database])
 
   const { sellable, invalid } = partitionSellable(products ?? [])
-  useLogInvalidProductsOnce(invalid)
+  useLogInvalidOnce(invalid, invalidProductKey, describeInvalidProduct)
 
   if (products === undefined) {
     return <p className="sell-screen-message muted">Loading menu…</p>
