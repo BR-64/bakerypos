@@ -1,6 +1,22 @@
 import type { CartLine, Product } from './types'
 
 /**
+ * Whether `product` is well-formed enough to sell: a non-empty name and a
+ * price that is a non-negative integer (satang). The Sell screen uses this
+ * to decide whether a tile is tappable — bad data (a non-integer, negative,
+ * NaN or missing price, or an empty/missing name) must never crash the
+ * screen or `addProduct`, so it's shown disabled instead.
+ */
+export function isSellable(product: Product): boolean {
+  return (
+    typeof product.name === 'string' &&
+    product.name.trim().length > 0 &&
+    Number.isInteger(product.price) &&
+    product.price >= 0
+  )
+}
+
+/**
  * Add one unit of `product` to the cart. If the product is already in the
  * cart, bumps that line's qty by 1 — the line keeps its original snapshot
  * (name/unitPrice) even if the product's price has since changed. Never

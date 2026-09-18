@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { addProduct, clear, decrement, increment, itemCount, remove } from './cart'
+import { addProduct, clear, decrement, increment, isSellable, itemCount, remove } from './cart'
 import { cartTotal } from './money'
 import type { CartLine, Product } from './types'
 
@@ -283,6 +283,43 @@ describe('remove', () => {
 describe('clear', () => {
   it('returns an empty cart', () => {
     expect(clear()).toEqual([])
+  })
+})
+
+describe('isSellable', () => {
+  it('is true for a well-formed product', () => {
+    expect(isSellable(croissant)).toBe(true)
+  })
+
+  it('is false for a non-integer price', () => {
+    expect(isSellable({ ...croissant, price: 55.5 })).toBe(false)
+  })
+
+  it('is false for a negative price', () => {
+    expect(isSellable({ ...croissant, price: -100 })).toBe(false)
+  })
+
+  it('is false for a NaN price', () => {
+    expect(isSellable({ ...croissant, price: NaN })).toBe(false)
+  })
+
+  it('is false for a missing price', () => {
+    // @ts-expect-error deliberately bad data
+    expect(isSellable({ ...croissant, price: undefined })).toBe(false)
+  })
+
+  it('is false for an empty or whitespace-only name', () => {
+    expect(isSellable({ ...croissant, name: '' })).toBe(false)
+    expect(isSellable({ ...croissant, name: '   ' })).toBe(false)
+  })
+
+  it('is false for a missing name', () => {
+    // @ts-expect-error deliberately bad data
+    expect(isSellable({ ...croissant, name: undefined })).toBe(false)
+  })
+
+  it('is true for a free (price 0) product', () => {
+    expect(isSellable({ ...croissant, price: 0 })).toBe(true)
   })
 })
 

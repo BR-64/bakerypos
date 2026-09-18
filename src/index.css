@@ -58,6 +58,24 @@ body,
   flex-direction: column;
   justify-content: space-between;
   box-shadow: 0 1px 3px rgb(0 0 0 / 0.1);
+  border: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  touch-action: manipulation;
+}
+
+.tile-disabled {
+  opacity: 0.55;
+  background: var(--bg);
+  box-shadow: none;
+}
+
+.tile-sold-out {
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-weight: 600;
+  text-transform: uppercase;
 }
 
 .cart-bar {
