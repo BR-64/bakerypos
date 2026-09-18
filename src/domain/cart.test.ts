@@ -405,6 +405,10 @@ describe('isSellable', () => {
     expect(isSellable({ ...croissant, sortOrder: undefined })).toBe(false)
   })
 
+  it('is false for a price beyond Number.MAX_SAFE_INTEGER, even though Number.isInteger would accept it', () => {
+    expect(isSellable({ ...croissant, price: 1e18 })).toBe(false)
+  })
+
   it('is false when archived is present but not a boolean', () => {
     // @ts-expect-error deliberately bad data
     expect(isSellable({ ...croissant, archived: 'false' })).toBe(false)
@@ -531,6 +535,10 @@ describe('isValidCartLine', () => {
   it('is true for a zero unitPrice (free item)', () => {
     expect(isValidCartLine({ ...croissantLine, unitPrice: 0 })).toBe(true)
   })
+
+  it('is false for a qty beyond Number.MAX_SAFE_INTEGER, even at price 0, even though Number.isInteger would accept it', () => {
+    expect(isValidCartLine({ ...croissantLine, unitPrice: 0, qty: 1e300 })).toBe(false)
+  })
 })
 
 describe('partitionCartLines', () => {
@@ -544,5 +552,20 @@ describe('partitionCartLines', () => {
 
   it('returns empty arrays for no lines', () => {
     expect(partitionCartLines([])).toEqual({ valid: [], invalid: [] })
+  })
+
+  it('treats a second line with a repeated productId as invalid, keeping only the first occurrence in valid', () => {
+    const duplicate: CartLine = { productId: 'p-croissant', name: 'Croissant (dup)', unitPrice: 6000, qty: 5 }
+    const { valid, invalid } = partitionCartLines([croissantLine, duplicate])
+    expect(valid).toEqual([croissantLine])
+    expect(invalid).toEqual([duplicate])
+  })
+
+  it('a third repeat of the same productId is also invalid, not just the second', () => {
+    const dup1: CartLine = { ...croissantLine, name: 'Dup 1' }
+    const dup2: CartLine = { ...croissantLine, name: 'Dup 2' }
+    const { valid, invalid } = partitionCartLines([croissantLine, dup1, dup2])
+    expect(valid).toEqual([croissantLine])
+    expect(invalid).toEqual([dup1, dup2])
   })
 })

@@ -19,8 +19,11 @@ function isBooleanOrAbsent(value: unknown): boolean {
  *
  * - `id` missing or not a non-empty string
  * - `name` missing, empty/whitespace-only, or not a string
- * - `price` not a non-negative integer (satang) — zero is allowed (a free
- *   item isn't forbidden by the spec)
+ * - `price` not a non-negative safe integer (satang) — zero is allowed (a
+ *   free item isn't forbidden by the spec), but a value beyond
+ *   `Number.MAX_SAFE_INTEGER` (e.g. `1e18`) is rejected even though
+ *   `Number.isInteger` would accept it, since arithmetic on it can silently
+ *   lose precision
  * - `sortOrder` not a finite number
  * - `archived` / `outOfStock` present but not a boolean (e.g. `"false"`) —
  *   absent is fine and treated as `false` elsewhere, via `=== true` checks
@@ -31,7 +34,7 @@ export function isSellable(product: Product): boolean {
     product.id.length > 0 &&
     typeof product.name === 'string' &&
     product.name.trim().length > 0 &&
-    Number.isInteger(product.price) &&
+    Number.isSafeInteger(product.price) &&
     product.price >= 0 &&
     Number.isFinite(product.sortOrder) &&
     isBooleanOrAbsent(product.archived) &&
@@ -140,9 +143,12 @@ export function itemCount(lines: CartLine[]): number {
  * - `line` is a non-null object (not an array, not a primitive)
  * - `productId` is a non-empty string
  * - `name` is a string that is non-empty after trimming
- * - `unitPrice` is an integer >= 0 (satang; zero is a valid free item)
- * - `qty` is an integer >= 1
- * - `unitPrice * qty` is a safe integer (guards against silent overflow)
+ * - `unitPrice` is a safe-integer >= 0 (satang; zero is a valid free item)
+ * - `qty` is a safe-integer >= 1 — `Number.isSafeInteger` rather than
+ *   `Number.isInteger` for both fields, so an out-of-range value like
+ *   `qty: 1e300` (which `Number.isInteger` accepts) is still rejected
+ * - `unitPrice * qty` is also a safe integer (guards against a product of
+ *   two individually-safe numbers still overflowing)
  */
 export function isValidCartLine(line: unknown): line is CartLine {
   if (typeof line !== 'object' || line === null || Array.isArray(line)) return false
@@ -152,9 +158,9 @@ export function isValidCartLine(line: unknown): line is CartLine {
     productId.length > 0 &&
     typeof name === 'string' &&
     name.trim().length > 0 &&
-    Number.isInteger(unitPrice) &&
+    Number.isSafeInteger(unitPrice) &&
     (unitPrice as number) >= 0 &&
-    Number.isInteger(qty) &&
+    Number.isSafeInteger(qty) &&
     (qty as number) >= 1 &&
     Number.isSafeInteger((unitPrice as number) * (qty as number))
   )
@@ -169,14 +175,27 @@ export interface PartitionedCartLines {
 
 /**
  * Splits `lines` into the well-formed ones and the invalid ones, keeping
- * input order within each group. See `useCart`, which exposes only `valid`
- * and logs each `invalid` line once.
+ * input order within each group. A line that's individually well-formed
+ * but repeats a `productId` already kept in `valid` is treated as invalid
+ * too — cart lines are keyed by `productId` everywhere downstream
+ * (React's list key, and every action's lookup-by-productId), so a
+ * duplicate would either render with a colliding key or get silently
+ * double-mutated by `increment`/`decrement`. The *first* occurrence wins;
+ * later ones are dropped into `invalid` and logged like any other corrupt
+ * line. See `useCart`, which exposes only `valid` and logs each `invalid`
+ * line once.
  */
 export function partitionCartLines(lines: CartLine[]): PartitionedCartLines {
   const valid: CartLine[] = []
   const invalid: CartLine[] = []
+  const seenProductIds = new Set<string>()
   for (const line of lines) {
-    ;(isValidCartLine(line) ? valid : invalid).push(line)
+    if (isValidCartLine(line) && !seenProductIds.has(line.productId)) {
+      seenProductIds.add(line.productId)
+      valid.push(line)
+    } else {
+      invalid.push(line)
+    }
   }
   return { valid, invalid }
 }
