@@ -43,7 +43,7 @@ body,
 .grid {
   list-style: none;
   padding: 0;
-  margin: 0;
+  margin: 0 0 16px;
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 12px;
@@ -111,7 +111,14 @@ body,
   display: flex;
   flex-direction: column;
   padding-bottom: 0;
+  /* Percentage min-height depends on every ancestor (html/body/#root)
+     actually resolving to a real height, which is fragile. 100dvh is
+     viewport-relative regardless of the ancestor chain, and — because
+     `* { box-sizing: border-box }` — already accounts for .app's own
+     padding on this same element. Kept as a fallback for browsers
+     without dvh support. */
   min-height: 100%;
+  min-height: 100dvh;
 }
 
 .sell-screen-message {
@@ -154,11 +161,16 @@ body,
 
 .cart-bar {
   /* Full-bleed: breaks out of .app's 16px side padding so the bar spans
-     the whole device width edge-to-edge, like a real POS action bar. */
+     the whole device width edge-to-edge, like a real POS action bar.
+     margin-top: auto pins it to the bottom of .sell-screen's flex column
+     (which is at least a full viewport tall — see .sell-screen) whenever
+     the content above is shorter than the screen, e.g. the loading/empty/
+     error states or a short category; position: sticky then keeps it
+     pinned to the viewport bottom once content does overflow and scrolls. */
   position: sticky;
   bottom: 0;
   width: calc(100% + 32px);
-  margin: 0 -16px;
+  margin: auto -16px 0;
   min-height: var(--tap);
   padding: 12px 20px;
   padding-bottom: calc(12px + env(safe-area-inset-bottom));
@@ -175,7 +187,8 @@ body,
 }
 
 .cart-bar:disabled {
+  /* Solid, not translucent — an opacity here would let grid content show
+     through the sticky bar. */
   background: var(--muted);
   color: #fff;
-  opacity: 0.7;
 }
