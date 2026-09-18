@@ -9,10 +9,19 @@ import { PlaceholderScreen } from './screens/PlaceholderScreen'
 import { SellScreen } from './screens/SellScreen'
 
 /**
- * Screen registry: one entry per `Screen`, each building that screen's JSX
- * from the shared `ScreenProps` — no hooks, no logic beyond that. Tasks 4-7
- * each swap exactly one line here (plus its import) as cash/promptpay/
- * orders/report/admin get their real screens in place of the placeholder.
+ * Screen registry: one entry per `Screen`, each a small component that
+ * only builds that screen's JSX from the shared `ScreenProps` — no logic
+ * of its own beyond that. Rendered as `<Entry {...props} />` below (never
+ * called as a plain function during App's render), so each one is a real
+ * component in the tree.
+ *
+ * For most of cash/promptpay/orders/report/admin, replacing the
+ * placeholder with the real screen is indeed just swapping one line here
+ * plus an import — but that's not the whole story for every task: task 4
+ * (cash checkout) also needs an order-confirmation toast that outlives the
+ * Cash screen itself, and task 6 (orders + void) adds a bottom nav and an
+ * order-detail view. Both are App-level additions, not just a registry
+ * swap.
  */
 const screens: Record<Screen, (props: ScreenProps) => ReactNode> = {
   sell: ({ cart, navigate, database }) => (
@@ -42,15 +51,19 @@ export default function App({ database = db }: { database?: PosDatabase }) {
   const [screen, setScreen] = useState<Screen>(HOME_SCREEN)
   const [retryKey, setRetryKey] = useState(0)
 
-  const navigate = (next: Screen) => setScreen(next)
+  // setState's dispatch function is already stable across renders, so
+  // `navigate` is too — no useCallback needed.
+  const navigate = setScreen
+
+  const Entry = screens[screen]
 
   return (
     <ErrorBoundary
       key={`${screen}:${retryKey}`}
       onRetry={() => setRetryKey((k) => k + 1)}
-      onBack={screen === 'sell' ? undefined : () => setScreen('sell')}
+      onBack={screen === HOME_SCREEN ? undefined : () => setScreen(HOME_SCREEN)}
     >
-      {screens[screen]({ cart, navigate, database })}
+      <Entry cart={cart} navigate={navigate} database={database} />
     </ErrorBoundary>
   )
 }

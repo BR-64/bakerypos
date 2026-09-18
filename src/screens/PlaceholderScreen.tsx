@@ -1,4 +1,4 @@
-import type { Screen } from '../navigation'
+import { HOME_SCREEN, type Screen } from '../navigation'
 
 export interface PlaceholderScreenProps {
   title: string
@@ -15,7 +15,7 @@ export function PlaceholderScreen({ title, navigate }: PlaceholderScreenProps) {
   return (
     <main className="app screen placeholder-screen">
       <header className="screen-header">
-        <button type="button" className="back-button" onClick={() => navigate('sell')}>
+        <button type="button" className="back-button" onClick={() => navigate(HOME_SCREEN)}>
           Back to Sell
         </button>
         <h1>{title}</h1>

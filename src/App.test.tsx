@@ -2,12 +2,42 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { PosDatabase } from './db/db'
+import type { CartScreenProps } from './screens/CartScreen'
+import type { SellScreenProps } from './screens/SellScreen'
+
+// Lets individual tests force the Cart or Sell screen to throw during
+// render, to exercise App's ErrorBoundary (Try again / Back to Sell /
+// Reload) without needing a real crash. `vi.hoisted` is required because
+// `vi.mock` factories run before the rest of this module's top-level code.
+const screenThrowFlags = vi.hoisted(() => ({ cart: false, sell: false }))
+
+vi.mock('./screens/CartScreen', async () => {
+  const actual = await vi.importActual<typeof import('./screens/CartScreen')>('./screens/CartScreen')
+  return {
+    CartScreen: (props: CartScreenProps) => {
+      if (screenThrowFlags.cart) throw new Error('CartScreen boom (test)')
+      return <actual.CartScreen {...props} />
+    },
+  }
+})
+
+vi.mock('./screens/SellScreen', async () => {
+  const actual = await vi.importActual<typeof import('./screens/SellScreen')>('./screens/SellScreen')
+  return {
+    SellScreen: (props: SellScreenProps) => {
+      if (screenThrowFlags.sell) throw new Error('SellScreen boom (test)')
+      return <actual.SellScreen {...props} />
+    },
+  }
+})
 
 let database: PosDatabase
 
 beforeEach(async () => {
   database = new PosDatabase(`test-${Math.random()}`)
   await database.open()
+  screenThrowFlags.cart = false
+  screenThrowFlags.sell = false
 })
 
 describe('App', () => {
@@ -88,5 +118,59 @@ describe('App', () => {
 
     expect(fetchSpy).not.toHaveBeenCalled()
     fetchSpy.mockRestore()
+  })
+
+  it('an error in the Cart screen shows Try again / Back to Sell / Reload; Back to Sell returns to Sell with the cart intact; Try again preserves the cart once recovered', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    render(<App database={database} />)
+
+    const croissantTile = await screen.findByRole('button', { name: /Croissant/ })
+    fireEvent.click(croissantTile)
+    await waitFor(() => {
+      expect(document.querySelector('.cart-bar-total')?.textContent).toBe('฿55')
+    })
+
+    screenThrowFlags.cart = true
+    fireEvent.click(screen.getByRole('button', { name: /Cart:/ }))
+
+    expect(await screen.findByText(/something went wrong/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /back to sell/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /reload/i })).toBeInTheDocument()
+
+    // Back to Sell: the cart itself (held in App, above every boundary)
+    // must be untouched by the crash.
+    fireEvent.click(screen.getByRole('button', { name: /back to sell/i }))
+    const bar = await screen.findByRole('button', { name: /Cart:/ })
+    expect(document.querySelector('.cart-bar-total')?.textContent).toBe('฿55')
+    expect(bar).not.toBeDisabled()
+
+    // Try again while still broken remounts and errors again — no crash
+    // escapes the boundary.
+    fireEvent.click(screen.getByRole('button', { name: /Cart:/ }))
+    expect(await screen.findByText(/something went wrong/i)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /try again/i }))
+    expect(await screen.findByText(/something went wrong/i)).toBeInTheDocument()
+
+    // Recover, and confirm the cart survived the whole crash/retry cycle.
+    screenThrowFlags.cart = false
+    fireEvent.click(screen.getByRole('button', { name: /try again/i }))
+    expect(await screen.findByRole('heading', { name: 'Cart' })).toBeInTheDocument()
+    expect(document.querySelector('.cart-bottom-bar-total')?.textContent).toBe('Total ฿55')
+
+    errorSpy.mockRestore()
+  })
+
+  it('an error on the Sell screen itself (already home) shows no Back to Sell button', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    screenThrowFlags.sell = true
+    render(<App database={database} />)
+
+    expect(await screen.findByText(/something went wrong/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /reload/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /back to sell/i })).not.toBeInTheDocument()
+
+    errorSpy.mockRestore()
   })
 })
