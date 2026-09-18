@@ -56,10 +56,26 @@ describe('completeOrder', () => {
     expect(o.payment.method).toBe('promptpay')
   })
 
-  it('keeps the snapshot price even after the product is repriced in the db', async () => {
-    const product = seedProducts.find((p) => p.id === 'p-croissant')!
-    await database.products.add(product)
-    const lines = addProduct(addProduct([], product), product)
+  it('keeps the snapshot price even after the product is repriced in the db, between adding to the cart and completing the order', async () => {
+    const seedProduct = seedProducts.find((p) => p.id === 'p-croissant')!
+    await database.products.add(seedProduct)
+    const originalPrice = seedProduct.price
+
+    // First unit added at the original price...
+    let lines = addProduct([], seedProduct)
+
+    // ...then the product is repriced in the db...
+    const repriced = { ...seedProduct, price: originalPrice + 10000 }
+    await database.products.update(seedProduct.id, { price: repriced.price })
+
+    // ...and a second unit is added using the now-stale `seedProduct`
+    // reference. `completeOrder` never reads the products table, so this
+    // only proves the snapshot survived if the line's price is still the
+    // original one, not the repriced one.
+    lines = addProduct(lines, seedProduct)
+    expect(lines).toEqual([
+      { productId: seedProduct.id, name: seedProduct.name, unitPrice: originalPrice, qty: 2 },
+    ])
 
     const order = await completeOrder(
       lines,
@@ -67,12 +83,12 @@ describe('completeOrder', () => {
       database,
     )
 
-    await database.products.update(product.id, { price: product.price + 10000 })
-
     const stored = await database.orders.get(order.id)
-    expect(stored?.lines[0].unitPrice).toBe(product.price)
-    expect(stored?.total).toBe(product.price * 2)
+    expect(stored?.lines[0].unitPrice).toBe(originalPrice)
+    expect(stored?.lines[0].qty).toBe(2)
     expect(stored?.total).toBe(cartTotal(lines))
+    // Sanity check the repriced value was never used.
+    expect(stored?.total).not.toBe(cartTotal([{ ...lines[0], unitPrice: repriced.price }]))
   })
 })
 
