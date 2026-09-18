@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { StrictMode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
-import type { CartLine } from '../domain/types'
+import type { CartLine, Product } from '../domain/types'
 import { useCart } from '../hooks/useCart'
 import type { Screen } from '../navigation'
 import { CartScreen } from './CartScreen'
@@ -17,6 +17,37 @@ const croissantLine: CartLine = {
   name: 'Croissant',
   unitPrice: 5500,
   qty: 2,
+}
+
+const croissantProduct: Product = {
+  id: 'p-croissant',
+  name: 'Croissant',
+  price: 5500,
+  category: 'pastry',
+  sortOrder: 1,
+  outOfStock: false,
+  archived: false,
+}
+
+/**
+ * Renders CartScreen alongside two "outside" buttons that mutate the same
+ * underlying `useCart` state directly (not through CartScreen's own UI),
+ * simulating the cart being cleared/refilled by something other than this
+ * screen's own Clear-confirm flow while it stays mounted.
+ */
+function SharedHarness({ initial }: { initial?: CartLine[] }) {
+  const cart = useCart(initial)
+  return (
+    <div>
+      <button type="button" onClick={() => cart.clear()}>
+        Outside Clear
+      </button>
+      <button type="button" onClick={() => cart.add(croissantProduct)}>
+        Outside Add
+      </button>
+      <CartScreen cart={cart} navigate={() => {}} />
+    </div>
+  )
 }
 
 /**
@@ -158,5 +189,64 @@ describe('CartScreen', () => {
 
     expect(screen.queryByRole('group', { name: 'Clear cart?' })).not.toBeInTheDocument()
     expect(screen.getByText('Cart is empty.')).toBeInTheDocument()
+  })
+
+  it('the confirm text is singular for exactly one item and plural otherwise', () => {
+    const singleLine: CartLine = { productId: 'p-cookie', name: 'Cookie', unitPrice: 4000, qty: 1 }
+    render(<Harness initial={[singleLine]} navigate={() => {}} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear cart' }))
+    expect(screen.getByText('Remove all 1 item?')).toBeInTheDocument()
+    expect(screen.queryByText('Remove all 1 items?')).not.toBeInTheDocument()
+  })
+
+  it('the confirm text is plural for more than one item', () => {
+    render(<Harness initial={[croissantLine]} navigate={() => {}} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear cart' }))
+    expect(screen.getByText('Remove all 2 items?')).toBeInTheDocument()
+  })
+
+  it('the clear confirm does not resurface if the cart is cleared and refilled from outside this screen while it is open', () => {
+    render(<SharedHarness initial={[croissantLine]} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear cart' }))
+    expect(screen.getByRole('group', { name: 'Clear cart?' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Outside Clear' }))
+    expect(screen.queryByRole('group', { name: 'Clear cart?' })).not.toBeInTheDocument()
+    expect(screen.getByText('Cart is empty.')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Outside Add' }))
+
+    // The cart is non-empty again, but the confirm must not have silently
+    // resurfaced just because `confirming` was left stranded `true` while
+    // hidden behind the (now false) `isEmpty` check.
+    expect(screen.queryByRole('group', { name: 'Clear cart?' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Clear cart' })).toBeInTheDocument()
+  })
+
+  it('two valid lines sharing a productId never produce a duplicate-key warning; only the first is shown', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const first: CartLine = { productId: 'p-croissant', name: 'Croissant', unitPrice: 5500, qty: 1 }
+    const duplicate: CartLine = {
+      productId: 'p-croissant',
+      name: 'Croissant (dup)',
+      unitPrice: 5500,
+      qty: 5,
+    }
+
+    render(<Harness initial={[first, duplicate]} navigate={() => {}} />)
+
+    expect(document.querySelectorAll('.cart-line').length).toBe(1)
+    expect(screen.getByText('Croissant')).toBeInTheDocument()
+    expect(screen.queryByText('Croissant (dup)')).not.toBeInTheDocument()
+
+    const duplicateKeyWarning = errorSpy.mock.calls.some(
+      (args) => typeof args[0] === 'string' && args[0].toLowerCase().includes('same key'),
+    )
+    expect(duplicateKeyWarning).toBe(false)
+
+    errorSpy.mockRestore()
   })
 })

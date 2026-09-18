@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Cart } from '../hooks/useCart'
 import { formatBaht, lineTotal } from '../domain/money'
-import type { Screen } from '../navigation'
+import { HOME_SCREEN, type Screen } from '../navigation'
 
 export interface CartScreenProps {
   cart: Pick<Cart, 'lines' | 'total' | 'count' | 'increment' | 'decrement' | 'clear'>
@@ -32,17 +32,27 @@ export function CartScreen({ cart, navigate }: CartScreenProps) {
     if (confirming) keepButtonRef.current?.focus()
   }, [confirming])
 
-  // The confirm group is gated on `!isEmpty` below (never rendered once the
-  // cart is empty), so stepping the last line to 0 while it's open closes
-  // it without needing a separate effect to reset `confirming` — and there
-  // is no way to un-empty the cart from within this screen (no "+" button
-  // survives once its line is gone), so a stale `confirming: true` can
-  // never resurface later in the same mount.
+  // If the cart becomes empty while the confirm is open — stepping the
+  // last line to 0, or the cart being cleared from outside this screen
+  // (e.g. a shared cart mutated elsewhere while this component stays
+  // mounted) — reset `confirming` here, during render, rather than in an
+  // effect: oxlint's react(set-state-in-effect) flags an effect that only
+  // derives state from other state as an unnecessary extra render, and
+  // this is the documented React pattern for adjusting state in response
+  // to a change (it bails out immediately, no re-render loop). Without
+  // this, `confirming` would stay stranded `true` (just hidden by the
+  // `!isEmpty` check below) and the confirm group would silently
+  // resurface the moment the cart is non-empty again — e.g. the cart is
+  // cleared from outside, then a line is added back from outside too,
+  // all while this screen stays mounted.
+  if (isEmpty && confirming) {
+    setConfirming(false)
+  }
 
   return (
     <main className="app screen cart-screen">
       <header className="screen-header">
-        <button type="button" className="back-button" onClick={() => navigate('sell')}>
+        <button type="button" className="back-button" onClick={() => navigate(HOME_SCREEN)}>
           Back to Sell
         </button>
         <h1>Cart</h1>
@@ -86,7 +96,9 @@ export function CartScreen({ cart, navigate }: CartScreenProps) {
       <div className="cart-clear">
         {confirming && !isEmpty ? (
           <div role="group" aria-label="Clear cart?" className="cart-clear-confirm">
-            <p>Remove all {cart.count} items?</p>
+            <p>
+              Remove all {cart.count} item{cart.count === 1 ? '' : 's'}?
+            </p>
             <div className="cart-clear-confirm-actions">
               <button
                 ref={keepButtonRef}
@@ -101,7 +113,7 @@ export function CartScreen({ cart, navigate }: CartScreenProps) {
                 className="cart-clear-yes"
                 onClick={() => {
                   cart.clear()
-                  navigate('sell')
+                  navigate(HOME_SCREEN)
                 }}
               >
                 Yes, clear
