@@ -54,6 +54,8 @@ body,
   border-radius: 12px;
   padding: 16px;
   min-height: 88px;
+  width: 100%;
+  height: 100%;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -116,34 +118,47 @@ body,
   padding: 24px 4px;
 }
 
-.sell-grid {
-  padding-bottom: calc(var(--tap) + 48px);
-}
-
 .error-boundary {
   padding: 24px 16px;
   text-align: center;
 }
 
-.error-boundary-reload {
+.error-boundary-actions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.error-boundary-button {
   min-height: var(--tap);
   min-width: var(--tap);
   padding: 0 24px;
   border: none;
   border-radius: 8px;
-  background: var(--accent);
-  color: #fff;
   font: inherit;
   font-weight: 600;
   touch-action: manipulation;
 }
 
+.error-boundary-retry {
+  background: var(--accent);
+  color: #fff;
+}
+
+.error-boundary-reload {
+  background: transparent;
+  color: var(--accent);
+  border: 2px solid var(--accent);
+}
+
 .cart-bar {
+  /* Full-bleed: breaks out of .app's 16px side padding so the bar spans
+     the whole device width edge-to-edge, like a real POS action bar. */
   position: sticky;
   bottom: 0;
-  left: 0;
-  right: 0;
-  width: 100%;
+  width: calc(100% + 32px);
+  margin: 0 -16px;
   min-height: var(--tap);
   padding: 12px 20px;
   padding-bottom: calc(12px + env(safe-area-inset-bottom));

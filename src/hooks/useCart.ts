@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import * as cart from '../domain/cart'
+import { safeString } from '../domain/log'
 import { cartTotal } from '../domain/money'
 import type { CartLine, Product } from '../domain/types'
 
@@ -14,19 +15,23 @@ import type { CartLine, Product } from '../domain/types'
 export function useCart() {
   const [lines, setLines] = useState<CartLine[]>([])
 
-  // `addProduct` throws for a genuinely new line with a non-integer price.
+  // `addProduct` no longer throws for expected bad-data cases (it returns
+  // `lines` unchanged for a product that fails `isSellable`) — the Sell
+  // screen never even wires up `onAdd` for those, since it renders only
+  // sellable products. This try/catch is a last-resort guard against a
+  // genuinely unexpected exception elsewhere in `addProduct`, kept because
   // React can run updaters during render (e.g. under StrictMode or when
-  // actions are batched), and there is no error boundary around a state
-  // updater's own execution, so that throw must never escape here — catch
-  // it inside the updater itself rather than pre-checking a ref, which can
-  // go stale when several actions run in the same batch.
+  // actions are batched) and there's no error boundary around a state
+  // updater's own execution — such a throw must never escape here.
+  // `safeString` keeps the log message itself from throwing, since
+  // `product` may be an untrusted, possibly-corrupt record.
   const add = useCallback((product: Product) => {
     setLines((prev) => {
       try {
         return cart.addProduct(prev, product)
       } catch (e) {
         console.error(
-          `useCart.add: refusing to add product "${product.id}" — price ${product.price} is not integer satang`,
+          `useCart.add: unexpected error adding product "${safeString(product.id)}" (price=${safeString(product.price)})`,
           e,
         )
         return prev

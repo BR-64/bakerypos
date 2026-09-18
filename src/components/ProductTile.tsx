@@ -13,30 +13,20 @@ export interface ProductTileProps {
  * which always includes the product name and (when valid) the formatted
  * price.
  *
- * Bad-data rule: a product with an invalid price (non-integer, negative,
- * NaN or missing) or an empty/missing name must never crash the tile or
- * become addable — `formatBaht` is never called with an invalid price,
- * since it can produce garbage for non-integer/negative input. Such a tile
- * renders disabled with a neutral "Unavailable" label and logs once via
- * console.error so the bad record can be found and fixed later.
+ * `SellScreen` filters invalid products out before they ever reach this
+ * component (via `partitionSellable`, which also logs them) — invalid data
+ * is skipped and logged, never shown. `isSellable` here is only a
+ * defensive last-resort guard against a caller passing bad data directly:
+ * it renders nothing, and never logs (the caller is responsible for
+ * logging once, since a tile re-rendering many times must not spam the
+ * console).
  */
 export function ProductTile({ product, onAdd }: ProductTileProps) {
-  if (!isSellable(product)) {
-    console.error(
-      `ProductTile: product "${product.id}" is not sellable (name=${JSON.stringify(product.name)}, price=${product.price}) — showing as unavailable`,
-    )
-    const label = typeof product.name === 'string' && product.name.trim() ? product.name : 'Unavailable'
-    return (
-      <button type="button" className="tile tile-disabled" disabled>
-        <span>{label}</span>
-        <strong>Unavailable</strong>
-      </button>
-    )
-  }
+  if (!isSellable(product)) return null
 
   const priceLabel = formatBaht(product.price)
 
-  if (product.outOfStock) {
+  if (product.outOfStock === true) {
     return (
       <button type="button" className="tile tile-disabled" disabled>
         <span>{product.name}</span>

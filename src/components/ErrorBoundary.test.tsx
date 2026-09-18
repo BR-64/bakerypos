@@ -16,7 +16,7 @@ describe('ErrorBoundary', () => {
     expect(screen.getByText('All good')).toBeInTheDocument()
   })
 
-  it('shows a fallback with a Reload button when a child throws', () => {
+  it('shows a fallback with a Reload button when a child throws, and no Try again button without onRetry', () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     render(
       <ErrorBoundary>
@@ -25,6 +25,20 @@ describe('ErrorBoundary', () => {
     )
     expect(screen.getByText(/something went wrong/i)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /reload/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /try again/i })).not.toBeInTheDocument()
+    errorSpy.mockRestore()
+  })
+
+  it('shows a Try again button when onRetry is given, and calls it on tap', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const onRetry = vi.fn()
+    render(
+      <ErrorBoundary onRetry={onRetry}>
+        <Bomb />
+      </ErrorBoundary>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: /try again/i }))
+    expect(onRetry).toHaveBeenCalledTimes(1)
     errorSpy.mockRestore()
   })
 
