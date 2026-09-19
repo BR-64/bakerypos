@@ -68,12 +68,6 @@ export function CashScreen({ cart, navigate, database, onOrderComplete }: CashSc
         <>
           <p className="checkout-total">{formatBaht(total)}</p>
 
-          {error && (
-            <p role="alert" className="checkout-error">
-              {error}
-            </p>
-          )}
-
           <div className="cash-entry">
             <span className="cash-entry-amount">{formatBaht(tendered)}</span>
             {tendered >= total ? (
@@ -114,6 +108,15 @@ export function CashScreen({ cart, navigate, database, onOrderComplete }: CashSc
               ⌫
             </button>
           </div>
+
+          {/* Below the keypad, above the bottom bar: an error must never
+              shift the keypad out from under the finger that was just
+              tapping it. */}
+          {error && (
+            <p role="alert" className="checkout-error">
+              {error}
+            </p>
+          )}
         </>
       )}
 

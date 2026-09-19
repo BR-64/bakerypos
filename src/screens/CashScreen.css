@@ -68,12 +68,19 @@
   font-size: 1.25rem;
 }
 
-/* Same height and position as Sell's cart bar (.cart-bar in index.css),
-   duplicated here rather than shared so this screen's own styling stays in
-   this file. */
+/* The buttons here must occupy the same vertical band as Sell's .cart-bar
+   (index.css) — same top edge, same overall height — so that a stray tap
+   right after a completed sale (which returns to Sell) lands on the now-
+   disabled cart bar, not on a product tile sitting above it. .bottom-bar
+   (shared) supplies the sticky positioning and safe-area handling; unlike
+   .cart-bar, which is itself the single 48px tap target, this bar's tap
+   targets are 48px *children* of this div, so padding-top is deliberately
+   0 (not 12px) — any top padding here would stack on top of those already-
+   48px buttons and push the bar's top edge above the cart bar's. */
 .cash-bottom-bar {
   min-height: var(--tap);
-  padding-top: 12px;
+  padding-top: 0;
+  padding-bottom: env(safe-area-inset-bottom);
   padding-left: 20px;
   padding-right: 20px;
   display: flex;

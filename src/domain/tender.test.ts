@@ -26,6 +26,13 @@ describe('pressDigit', () => {
     const six = '123456'
     expect(pressDigit(six, '7')).toBe(six)
   })
+
+  it('is exact at the ฿999,999 cap: typing it digit by digit lands on the max entry', () => {
+    const entry = ['9', '9', '9', '9', '9', '9'].reduce((e, d) => pressDigit(e, d), '')
+    expect(entry).toBe('999999')
+    // A 7th digit is ignored, so the entry never grows past the cap.
+    expect(pressDigit(entry, '9')).toBe('999999')
+  })
 })
 
 describe('deleteDigit', () => {
@@ -61,5 +68,19 @@ describe('cashPayment', () => {
 
   it('handles an exact ฿0 cart (free items)', () => {
     expect(cashPayment(0, 0)).toEqual({ method: 'cash', tendered: 0, change: 0 })
+  })
+
+  it('is exact at the ฿999,999 keypad cap', () => {
+    const maxTendered = entryToSatang('999999') // 99,999,900 satang
+    expect(cashPayment(maxTendered, maxTendered)).toEqual({
+      method: 'cash',
+      tendered: 99999900,
+      change: 0,
+    })
+    expect(cashPayment(maxTendered - 100, maxTendered)).toEqual({
+      method: 'cash',
+      tendered: 99999900,
+      change: 100,
+    })
   })
 })

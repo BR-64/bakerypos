@@ -67,6 +67,27 @@ describe('App — Cash checkout', () => {
     expect(screen.getByRole('status')).toBeEmptyDOMElement()
   })
 
+  it('goes Sell -> Cart -> Cash -> ฿500 -> Sell with the correct change for a ฿55 cart', async () => {
+    render(<App database={database} />)
+    await addCroissantAndOpenCash()
+
+    fireEvent.click(screen.getByRole('button', { name: '฿500' }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('Order #1 — change ฿445')
+    })
+    const bar = await screen.findByRole('button', { name: /Cart:/ })
+    expect(document.querySelector('.cart-bar-total')?.textContent).toBe('฿0')
+    expect(bar).toBeDisabled()
+
+    const [order] = await database.orders.toArray()
+    expect(order).toMatchObject({
+      number: 1,
+      total: 5500,
+      payment: { method: 'cash', tendered: 50000, change: 44500 },
+    })
+  })
+
   it('a second sale replaces the previous confirmation', async () => {
     render(<App database={database} />)
     await addCroissantAndOpenCash()
