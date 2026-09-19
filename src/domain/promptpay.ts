@@ -3,7 +3,11 @@ import type { Satang } from './types'
 
 /**
  * A PromptPay ID is either a 10-digit mobile number starting with `0`, or a
- * 13-digit national/tax ID. Digits only — no dashes or spaces.
+ * 13-digit national/tax ID. Digits only — no dashes, spaces, a leading `+`,
+ * or non-ASCII (e.g. Thai) digits. This is a deliberate fail-closed choice:
+ * `\d` only ever matches ASCII 0-9, so anything a human might type that
+ * *looks* like a valid ID but isn't exactly digits is rejected rather than
+ * silently building a QR for the wrong recipient.
  */
 export function isValidPromptPayId(id: string): boolean {
   if (!/^\d+$/.test(id)) return false
@@ -24,6 +28,22 @@ export function formatPromptPayAmount(total: Satang): string {
   const baht = Math.floor(total / 100)
   const satang = total % 100
   return `${baht}.${String(satang).padStart(2, '0')}`
+}
+
+/**
+ * True if `total` is too large to fit in the payload's amount field once
+ * formatted — including when it can't even be formatted (e.g. not a safe
+ * integer). `cart.total` is derived from Dexie product prices, which
+ * CLAUDE.md treats as untrusted, so a checkout screen calls this *before*
+ * `promptPayPayload` to decide whether to build a QR at all, rather than
+ * relying on catching that function's throw during render.
+ */
+export function isPromptPayAmountTooLarge(total: Satang): boolean {
+  try {
+    return formatPromptPayAmount(total).length > 13
+  } catch {
+    return true
+  }
 }
 
 /**

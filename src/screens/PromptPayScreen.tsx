@@ -1,13 +1,17 @@
 import { QRCodeSVG } from 'qrcode.react'
 import './PromptPayScreen.css'
-import { PROMPTPAY_ID } from '../config'
+import { PLACEHOLDER_PROMPTPAY_ID, PROMPTPAY_ID } from '../config'
 import { db, type PosDatabase } from '../db/db'
 import { formatBaht } from '../domain/money'
-import { isValidPromptPayId, promptPayPayload } from '../domain/promptpay'
+import {
+  isPromptPayAmountTooLarge,
+  isValidPromptPayId,
+  promptPayPayload,
+} from '../domain/promptpay'
 import type { Order } from '../domain/types'
 import { useCompleteOrder } from '../hooks/useCompleteOrder'
 import type { Cart } from '../hooks/useCart'
-import { type Screen } from '../navigation'
+import type { Screen } from '../navigation'
 
 export interface PromptPayScreenProps {
   cart: Pick<Cart, 'lines' | 'total'>
@@ -39,9 +43,10 @@ export function PromptPayScreen({
 
   const isEmpty = cart.lines.length === 0
   const isZero = cart.total <= 0
+  const isTooLarge = isPromptPayAmountTooLarge(cart.total)
   const idValid = isValidPromptPayId(promptPayId)
-  const isTestId = promptPayId === PROMPTPAY_ID
-  const showQr = !isEmpty && !isZero && idValid
+  const isTestId = promptPayId === PLACEHOLDER_PROMPTPAY_ID
+  const showQr = !isEmpty && !isZero && !isTooLarge && idValid
   const payload = showQr ? promptPayPayload(promptPayId, cart.total) : null
 
   return (
@@ -72,6 +77,10 @@ export function PromptPayScreen({
 
           {isZero ? (
             <p className="promptpay-message muted">Nothing to charge — use Cash</p>
+          ) : isTooLarge ? (
+            <p className="promptpay-message muted">
+              Amount too large for a PromptPay QR — use Cash
+            </p>
           ) : !idValid ? (
             <p className="promptpay-message muted">PromptPay isn't set up</p>
           ) : (

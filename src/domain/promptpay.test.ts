@@ -1,12 +1,22 @@
 import { describe, expect, it } from 'vitest'
-import { formatPromptPayAmount, isValidPromptPayId, promptPayPayload } from './promptpay'
+import {
+  formatPromptPayAmount,
+  isPromptPayAmountTooLarge,
+  isValidPromptPayId,
+  promptPayPayload,
+} from './promptpay'
 
 /**
- * CRC16/XMODEM (poly 0x1021, init 0xFFFF, no reflect, no xorout), written
- * independently of `promptpay-qr`'s own `crc` dependency, so this test would
- * catch a broken checksum even if that dependency were.
+ * CRC-16/CCITT-FALSE (poly 0x1021, init 0xFFFF, no reflect, no xorout) —
+ * what EMV/BOT's PromptPay QR spec actually uses for field 63, written
+ * independently of `promptpay-qr`'s own `crc` dependency so this test would
+ * catch a broken checksum even if that dependency were. Note this is *not*
+ * CRC-16/XMODEM despite `crc`'s function being named `crc16xmodem`: XMODEM
+ * uses the same polynomial but an init of 0, not 0xFFFF — `promptpay-qr`
+ * gets CCITT-FALSE behaviour out of that function only because it passes
+ * 0xFFFF in explicitly as the running CRC's initial value.
  */
-function crc16xmodem(input: string): number {
+function crc16CcittFalse(input: string): number {
   let crc = 0xffff
   for (let i = 0; i < input.length; i++) {
     crc ^= input.charCodeAt(i) << 8
@@ -15,6 +25,26 @@ function crc16xmodem(input: string): number {
     }
   }
   return crc
+}
+
+/**
+ * Parses top-level EMV QR TLV fields (2-digit ID, 2-digit length, value)
+ * into a Map, in order — independent of (and simpler than) `promptpay.ts`'s
+ * own private `extractField`, so these tests aren't just re-checking that
+ * function against itself. Also used to parse the nested TLV value of field
+ * 29 (merchant account info).
+ */
+function parseTlv(payload: string): Map<string, string> {
+  const fields = new Map<string, string>()
+  let pos = 0
+  while (pos + 4 <= payload.length) {
+    const id = payload.slice(pos, pos + 2)
+    const length = Number(payload.slice(pos + 2, pos + 4))
+    const value = payload.slice(pos + 4, pos + 4 + length)
+    fields.set(id, value)
+    pos += 4 + length
+  }
+  return fields
 }
 
 const PHONE_ID = '0000000000'
@@ -38,6 +68,16 @@ describe('isValidPromptPayId', () => {
     expect(isValidPromptPayId('081234567a')).toBe(false) // letters
     expect(isValidPromptPayId('')).toBe(false)
   })
+
+  // Fail-closed on purpose: anything that isn't exactly ASCII digits is
+  // rejected, even if a human would read it as "the same number" — see the
+  // doc comment on isValidPromptPayId.
+  it('rejects spaces, a leading +, and non-ASCII (Thai) digits', () => {
+    expect(isValidPromptPayId('081-234-5678')).toBe(false)
+    expect(isValidPromptPayId('081 234 5678')).toBe(false)
+    expect(isValidPromptPayId('+66812345678')).toBe(false)
+    expect(isValidPromptPayId('๐๘๑๒๓๔๕๖๗๘')).toBe(false)
+  })
 })
 
 describe('formatPromptPayAmount', () => {
@@ -54,6 +94,18 @@ describe('formatPromptPayAmount', () => {
   })
 })
 
+describe('isPromptPayAmountTooLarge', () => {
+  it('is false right up to the 13-character amount-field boundary, true just past it', () => {
+    expect(isPromptPayAmountTooLarge(999999999999)).toBe(false) // "9999999999.99" (13 chars)
+    expect(isPromptPayAmountTooLarge(1000000000000)).toBe(true) // "10000000000.00" (14 chars)
+  })
+
+  it('is true (never throws) for an amount that cannot even be formatted', () => {
+    expect(isPromptPayAmountTooLarge(Number.NaN)).toBe(true)
+    expect(isPromptPayAmountTooLarge(45.5)).toBe(true)
+  })
+})
+
 describe('promptPayPayload', () => {
   it('embeds the amount field with two decimals, matching the library exactly', () => {
     expect(promptPayPayload(PHONE_ID, 11000)).toContain('5406110.00')
@@ -66,12 +118,28 @@ describe('promptPayPayload', () => {
     expect(promptPayPayload(PHONE_ID, 4550)).toContain('010212')
   })
 
-  it('ends with the field-63 CRC16/XMODEM of everything before it, checked against an independent implementation', () => {
+  it('ends with the field-63 CRC-16/CCITT-FALSE of everything before it, checked against an independent implementation', () => {
     const payload = promptPayPayload(PHONE_ID, 4550)
     const withoutCrc = payload.slice(0, -4)
-    const expected = crc16xmodem(withoutCrc).toString(16).toUpperCase().padStart(4, '0')
+    const expected = crc16CcittFalse(withoutCrc).toString(16).toUpperCase().padStart(4, '0')
     expect(payload.slice(-4)).toBe(expected)
     expect(withoutCrc.endsWith('6304')).toBe(true)
+  })
+
+  it('encodes a 10-digit phone number per EMVCo/BOT: AID, then sub-field 01 zero-padded to 13 digits with the leading 0 replaced by 66', () => {
+    const payload = promptPayPayload('0812345678', 4550)
+    const merchantAccount = parseTlv(parseTlv(payload).get('29') ?? '')
+    expect(merchantAccount.get('00')).toBe('A000000677010111')
+    expect(merchantAccount.get('01')).toBe('0066812345678')
+    expect(merchantAccount.has('02')).toBe(false)
+  })
+
+  it('encodes a 13-digit ID per EMVCo/BOT as sub-field 02, unchanged', () => {
+    const payload = promptPayPayload(TAX_ID, 4550)
+    const merchantAccount = parseTlv(parseTlv(payload).get('29') ?? '')
+    expect(merchantAccount.get('00')).toBe('A000000677010111')
+    expect(merchantAccount.get('02')).toBe(TAX_ID)
+    expect(merchantAccount.has('01')).toBe(false)
   })
 
   it('matches a golden payload for a known ID and amount', () => {
@@ -90,6 +158,11 @@ describe('promptPayPayload', () => {
     // 123456789012.00 is 15 characters, over the 13-character field limit,
     // while 12345678901200 is still a safe integer.
     expect(() => promptPayPayload(PHONE_ID, 12345678901200)).toThrow()
+  })
+
+  it('is right at the 13-character amount-field boundary: fits at 999999999999, throws at 1000000000000', () => {
+    expect(() => promptPayPayload(PHONE_ID, 999999999999)).not.toThrow()
+    expect(() => promptPayPayload(PHONE_ID, 1000000000000)).toThrow()
   })
 
   it('throws for a bad PromptPay ID', () => {

@@ -34,8 +34,29 @@
   padding: 12px;
 }
 
+/*
+ * .bottom-bar (src/index.css) sets `padding-bottom: calc(12px +
+ * env(safe-area-inset-bottom))` for CartScreen's two-button bar. This bar
+ * holds a single 48px button, so it only needs side padding here — set as
+ * individual longhands, never the `padding` shorthand, since a shorthand
+ * would silently zero out that inherited padding-bottom (and add an unused
+ * padding-top) even though both selectors have equal specificity, because
+ * this rule loads after index.css. That bug made the bar 72px tall
+ * (12 + 48 + 12) with 12px of dead space above the button — enough for a
+ * fast double-tap right after "Paid — done" to land on a Sell product tile
+ * underneath, and it put the button inside the iPhone home-indicator zone.
+ * With this, the bar is exactly 48px + the safe-area inset, top edge lined
+ * up with .cart-bar's.
+ */
 .promptpay-bottom-bar {
-  padding: 12px 20px;
+  padding-top: 0;
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: 20px;
+  padding-right: 20px;
+  /* Opaque: a sticky bar over scrollable content must never show the grid
+     through it, and this bar (unlike .cart-bar) has no background of its
+     own from a shared rule. */
+  background: #2f6f4e;
 }
 
 .promptpay-paid-button {

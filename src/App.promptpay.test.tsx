@@ -72,6 +72,23 @@ describe('App — PromptPay checkout', () => {
     expect(screen.getByRole('status')).toBeEmptyDOMElement()
   })
 
+  it('a second consecutive PromptPay sale shows "Order #2 — paid" with 2 orders stored', async () => {
+    render(<App database={database} />)
+    await addCroissantAndOpenPromptPay()
+    fireEvent.click(screen.getByRole('button', { name: 'Paid — done' }))
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('Order #1 — paid')
+    })
+
+    await addCroissantAndOpenPromptPay()
+    fireEvent.click(screen.getByRole('button', { name: 'Paid — done' }))
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('Order #2 — paid')
+    })
+
+    expect(await database.orders.count()).toBe(2)
+  })
+
   it('never calls fetch on the way to a completed PromptPay sale', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(() => {
       throw new Error('fetch should never be called on the checkout path')

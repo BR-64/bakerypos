@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { StrictMode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PROMPTPAY_ID } from '../config'
@@ -43,6 +43,16 @@ const freeLine: CartLine = {
   qty: 1,
 }
 
+// A corrupt/absurd Dexie price (still passes isSellable) whose formatted
+// amount is over the 13-character field limit — must show a handled state,
+// never throw during render (CLAUDE.md: Dexie data is untrusted).
+const hugeLine: CartLine = {
+  productId: 'p-huge',
+  name: 'Huge',
+  unitPrice: 5_000_000_000_000,
+  qty: 1,
+}
+
 /** Renders PromptPayScreen with a real useCart(initial), the way App.tsx does. */
 function Harness({
   initial,
@@ -78,12 +88,12 @@ describe('PromptPayScreen', () => {
     expect(qr()).toHaveAttribute('data-value', promptPayPayload(PROMPTPAY_ID, 5500))
   })
 
-  it('shows the test-ID warning while the placeholder ID is in use', () => {
+  it('shows the test-ID warning for the default (configured) ID, which is still the placeholder', () => {
     render(<Harness initial={[croissantLine]} />)
     expect(screen.getByText('Test PromptPay ID — not a real account')).toBeInTheDocument()
   })
 
-  it('hides the test-ID warning for a real-looking ID', () => {
+  it('hides the test-ID warning once a real-looking ID is configured, with no prop override', () => {
     render(<Harness initial={[croissantLine]} promptPayId="0812345678" />)
     expect(screen.queryByText('Test PromptPay ID — not a real account')).not.toBeInTheDocument()
   })
@@ -114,7 +124,7 @@ describe('PromptPayScreen', () => {
     expect(onOrderComplete).toHaveBeenCalledWith(order)
   })
 
-  it('under StrictMode, a double tap on Paid creates exactly one order', async () => {
+  it('under StrictMode, a same-turn double tap on Paid creates exactly one order', async () => {
     const onOrderComplete = vi.fn()
     render(
       <StrictMode>
@@ -122,10 +132,40 @@ describe('PromptPayScreen', () => {
       </StrictMode>,
     )
 
-    const paidButton = screen.getByRole('button', { name: 'Paid — done' })
-    fireEvent.click(paidButton)
-    fireEvent.click(paidButton)
+    const paidButton = screen.getByRole('button', { name: 'Paid — done' }) as HTMLButtonElement
+    // Both clicks happen before React re-renders with `pending`, unlike two
+    // separate fireEvent.click calls — this is what actually exercises the
+    // synchronous in-flight guard rather than the `disabled` attribute.
+    act(() => {
+      paidButton.click()
+      paidButton.click()
+    })
 
+    await waitFor(() => expect(onOrderComplete).toHaveBeenCalledTimes(1))
+    expect(await database.orders.count()).toBe(1)
+  })
+
+  it('everything is disabled while a save is pending, then re-enables once it resolves', async () => {
+    // Hold the real transaction behind a promise this test controls, rather
+    // than replacing it outright, so the order still actually gets stored
+    // once released.
+    const originalTransaction = database.transaction.bind(database)
+    let releaseGate!: () => void
+    const gate = new Promise<void>((resolve) => (releaseGate = resolve))
+    ;(vi.spyOn(database, 'transaction') as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      (...args: unknown[]) =>
+        gate.then(() => (originalTransaction as (...a: unknown[]) => unknown)(...args)),
+    )
+    const onOrderComplete = vi.fn()
+    render(<Harness initial={[croissantLine]} onOrderComplete={onOrderComplete} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Paid — done' }))
+
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Paid — done' })).toBeDisabled()
+    expect(onOrderComplete).not.toHaveBeenCalled()
+
+    releaseGate()
     await waitFor(() => expect(onOrderComplete).toHaveBeenCalledTimes(1))
     expect(await database.orders.count()).toBe(1)
   })
@@ -152,12 +192,47 @@ describe('PromptPayScreen', () => {
     expect(await database.orders.count()).toBe(1)
   })
 
-  it('฿0 total shows "Nothing to charge — use Cash", no QR, and never writes', () => {
+  it('an always-failing save leaves the same QR value in place, stores nothing, and keeps showing the alert across repeated taps', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    ;(vi.spyOn(database, 'transaction') as unknown as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error('disk full'),
+    )
+    const onOrderComplete = vi.fn()
+    render(<Harness initial={[croissantLine]} onOrderComplete={onOrderComplete} />)
+    const expectedValue = promptPayPayload(PROMPTPAY_ID, 5500)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Paid — done' }))
+    await screen.findByRole('alert')
+    fireEvent.click(screen.getByRole('button', { name: 'Paid — done' }))
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/couldn't save/i))
+
+    expect(qr()).toHaveAttribute('data-value', expectedValue)
+    expect(onOrderComplete).not.toHaveBeenCalled()
+    expect(await database.orders.count()).toBe(0)
+  })
+
+  it('฿0 total shows "Nothing to charge — use Cash", no QR, and never writes even if Paid is clicked', async () => {
     render(<Harness initial={[freeLine]} />)
 
     expect(screen.getByText('Nothing to charge — use Cash')).toBeInTheDocument()
     expect(qr()).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Paid — done' })).toBeDisabled()
+    const paidButton = screen.getByRole('button', { name: 'Paid — done' })
+    expect(paidButton).toBeDisabled()
+
+    fireEvent.click(paidButton)
+    expect(await database.orders.count()).toBe(0)
+  })
+
+  it('an amount too large for the payload field shows a handled message instead of throwing, no QR, and never writes', async () => {
+    expect(() => render(<Harness initial={[hugeLine]} />)).not.toThrow()
+
+    expect(screen.getByText('Amount too large for a PromptPay QR — use Cash')).toBeInTheDocument()
+    expect(qr()).not.toBeInTheDocument()
+    const paidButton = screen.getByRole('button', { name: 'Paid — done' })
+    expect(paidButton).toBeDisabled()
+
+    fireEvent.click(paidButton)
+    expect(await database.orders.count()).toBe(0)
   })
 
   it('an empty cart shows the empty state, no QR, and a disabled Paid button', () => {
