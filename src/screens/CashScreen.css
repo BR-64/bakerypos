@@ -1,0 +1,36 @@
+.cash-screen-message {
+  padding: 24px 4px;
+}
+
+/* Same height and position as Sell's cart bar (.cart-bar in index.css),
+   duplicated here rather than shared so this screen's own styling stays in
+   this file. */
+.cash-bottom-bar {
+  min-height: var(--tap);
+  padding-top: 12px;
+  padding-left: 20px;
+  padding-right: 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--fg);
+  color: #fff;
+}
+
+.cash-tender-button {
+  flex: 1;
+  min-height: var(--tap);
+  border: none;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 600;
+  touch-action: manipulation;
+}
+
+.cash-tender-button:disabled {
+  background: var(--muted);
+  color: #fff;
+}
