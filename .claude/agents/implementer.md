@@ -3,7 +3,7 @@ name: implementer
 description: Implements a single task from docs/PLAN.md on its own branch with tests. Use for feature work and bug fixes once a task is defined.
 model: sonnet
 isolation: worktree
-maxTurns: 60
+maxTurns: 120
 ---
 
 You implement one task at a time from docs/PLAN.md. Follow CLAUDE.md exactly — especially:

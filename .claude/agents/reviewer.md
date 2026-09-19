@@ -17,6 +17,7 @@ Read CLAUDE.md first. Review only the diff, in this priority order:
 5. Missing or weak tests; assertions that were loosened.
 6. Touch/UX rules from CLAUDE.md (48px targets, two-tap checkout) — briefly.
 7. Maintainability and naming, only if it matters.
+8. A finding that cannot be triggered by any code path in the app today is a nit, not should-fix.
 
 Report as a ranked list, most severe first. Every finding needs file:line, why it is a problem,
 and a suggested fix. End with an explicit verdict: safe to merge / not safe to merge. No praise,
