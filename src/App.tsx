@@ -7,6 +7,7 @@ import type { Order } from './domain/types'
 import { useCart } from './hooks/useCart'
 import { HOME_SCREEN, SCREEN_TITLES, type Screen, type ScreenProps } from './navigation'
 import { CartScreen } from './screens/CartScreen'
+import { CashScreen } from './screens/CashScreen'
 import { PlaceholderScreen } from './screens/PlaceholderScreen'
 import { SellScreen } from './screens/SellScreen'
 
@@ -28,7 +29,7 @@ const screens: Record<Screen, (props: ScreenProps) => ReactNode> = {
     <SellScreen cart={cart} onOpenCart={() => navigate('cart')} database={database} />
   ),
   cart: ({ cart, navigate }) => <CartScreen cart={cart} navigate={navigate} />,
-  cash: (props) => <PlaceholderScreen {...props} title={SCREEN_TITLES.cash} />,
+  cash: (props) => <CashScreen {...props} />,
   // Keep this comment between `cash` and `promptpay`: tasks 4 and 5 each
   // change one of those lines on separate branches, and git treats edits to
   // adjacent lines as a conflict.
