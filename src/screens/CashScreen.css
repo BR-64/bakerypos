@@ -2,6 +2,72 @@
   padding: 24px 4px;
 }
 
+.cash-entry {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+.cash-entry-amount {
+  color: var(--muted);
+  font-size: 1.1rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Change due, once tendered covers the total: very large type. */
+.cash-change {
+  font-size: 2.25rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.cash-short {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.cash-keypad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.cash-key {
+  min-width: 56px;
+  min-height: 56px;
+  border: none;
+  border-radius: 12px;
+  background: var(--tile);
+  color: inherit;
+  font: inherit;
+  font-size: 1.5rem;
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.1);
+  touch-action: manipulation;
+}
+
+.cash-key:disabled {
+  opacity: 0.55;
+}
+
+.cash-key-spacer {
+  min-width: 56px;
+  min-height: 56px;
+}
+
+.cash-key-delete {
+  background: transparent;
+  border: 2px solid var(--accent);
+  color: var(--accent);
+  font-size: 1.25rem;
+}
+
 /* Same height and position as Sell's cart bar (.cart-bar in index.css),
    duplicated here rather than shared so this screen's own styling stays in
    this file. */
@@ -30,7 +96,21 @@
   touch-action: manipulation;
 }
 
-.cash-tender-button:disabled {
+.cash-done-button {
+  flex: 1;
+  min-height: var(--tap);
+  border: none;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  font-size: 1.1rem;
+  font-weight: 700;
+  touch-action: manipulation;
+}
+
+.cash-tender-button:disabled,
+.cash-done-button:disabled {
   background: var(--muted);
   color: #fff;
 }

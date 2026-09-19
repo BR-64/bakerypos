@@ -1,8 +1,9 @@
+import { useState } from 'react'
 import './CashScreen.css'
 import { useCompleteOrder } from '../hooks/useCompleteOrder'
 import type { Cart } from '../hooks/useCart'
 import { formatBaht, quickTenderOptions } from '../domain/money'
-import { cashPayment } from '../domain/tender'
+import { cashPayment, deleteDigit, entryToSatang, pressDigit, type TenderEntry } from '../domain/tender'
 import type { PosDatabase } from '../db/db'
 import type { Order, Satang } from '../domain/types'
 import type { Screen } from '../navigation'
@@ -14,23 +15,33 @@ export interface CashScreenProps {
   onOrderComplete: (order: Order) => void
 }
 
+const DIGIT_ROWS: readonly (readonly string[])[] = [
+  ['1', '2', '3'],
+  ['4', '5', '6'],
+  ['7', '8', '9'],
+]
+
 /**
- * Cash checkout. Reads only `cart.lines`/`cart.total` — no Dexie reads here
- * — and stores the sale exclusively via `useCompleteOrder`, which App's
- * `onOrderComplete` uses to clear the cart, return to Sell and show the
- * confirmation toast; this screen never does either itself.
+ * Cash checkout: pick a quick-tender note (one tap completes the sale) or
+ * type an amount on the keypad and tap Done. Reads only `cart.lines`/
+ * `cart.total` — no Dexie reads here — and stores the sale exclusively via
+ * `useCompleteOrder`, which App's `onOrderComplete` uses to clear the cart,
+ * return to Sell and show the confirmation toast; this screen never does
+ * either itself.
  *
- * For now this covers only the quick-tender note path: a bottom bar the
- * same height and position as Sell's cart bar holds `quickTenderOptions`
- * buttons ("Exact ฿X" first) and one tap completes the sale (Cart → Cash →
- * note = two taps). The keypad + Done path is added on top of this in a
- * later commit.
+ * The bottom bar swaps between the quick-tender notes (while `entry` is
+ * empty) and a single Done button (once digits have been typed) — never
+ * both — matching the "Cart → Cash → note = two taps" rule for the note
+ * path, and keeping Done's enabled state tied only to what's been typed.
  */
 export function CashScreen({ cart, navigate, database, onOrderComplete }: CashScreenProps) {
+  const [entry, setEntry] = useState<TenderEntry>('')
   const { pending, error, complete } = useCompleteOrder(cart.lines, database, onOrderComplete)
 
   const isEmpty = cart.lines.length === 0
   const total = cart.total
+  const tendered = entryToSatang(entry)
+  const short = total - tendered
 
   function payWith(amount: Satang) {
     const payment = cashPayment(total, amount)
@@ -62,22 +73,74 @@ export function CashScreen({ cart, navigate, database, onOrderComplete }: CashSc
               {error}
             </p>
           )}
+
+          <div className="cash-entry">
+            <span className="cash-entry-amount">{formatBaht(tendered)}</span>
+            {tendered >= total ? (
+              <span className="cash-change">Change {formatBaht(tendered - total)}</span>
+            ) : (
+              <span className="cash-short">{formatBaht(short)} short</span>
+            )}
+          </div>
+
+          <div className="cash-keypad">
+            {DIGIT_ROWS.flat().map((digit) => (
+              <button
+                key={digit}
+                type="button"
+                className="cash-key"
+                disabled={pending}
+                onClick={() => setEntry((e) => pressDigit(e, digit))}
+              >
+                {digit}
+              </button>
+            ))}
+            <span className="cash-key-spacer" aria-hidden="true" />
+            <button
+              type="button"
+              className="cash-key"
+              disabled={pending}
+              onClick={() => setEntry((e) => pressDigit(e, '0'))}
+            >
+              0
+            </button>
+            <button
+              type="button"
+              className="cash-key cash-key-delete"
+              aria-label="Delete digit"
+              disabled={pending || entry === ''}
+              onClick={() => setEntry((e) => deleteDigit(e))}
+            >
+              ⌫
+            </button>
+          </div>
         </>
       )}
 
       {!isEmpty && (
         <div className="bottom-bar cash-bottom-bar">
-          {quickTenderOptions(total).map((amount) => (
+          {entry === '' ? (
+            quickTenderOptions(total).map((amount) => (
+              <button
+                key={amount}
+                type="button"
+                className="cash-tender-button"
+                disabled={pending}
+                onClick={() => payWith(amount)}
+              >
+                {amount === total ? `Exact ${formatBaht(amount)}` : formatBaht(amount)}
+              </button>
+            ))
+          ) : (
             <button
-              key={amount}
               type="button"
-              className="cash-tender-button"
-              disabled={pending}
-              onClick={() => payWith(amount)}
+              className="cash-done-button"
+              disabled={pending || tendered < total}
+              onClick={() => payWith(tendered)}
             >
-              {amount === total ? `Exact ${formatBaht(amount)}` : formatBaht(amount)}
+              Done
             </button>
-          ))}
+          )}
         </div>
       )}
     </main>

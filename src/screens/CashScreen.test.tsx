@@ -50,7 +50,7 @@ beforeEach(async () => {
   await database.open()
 })
 
-describe('CashScreen — quick tender', () => {
+describe('CashScreen', () => {
   it('Exact stores tendered = total and change 0, and calls onOrderComplete once', async () => {
     const onOrderComplete = vi.fn()
     render(
@@ -193,6 +193,74 @@ describe('CashScreen — quick tender', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Back to Cart' }))
     expect(navigate).toHaveBeenCalledWith('cart')
+  })
+
+  it('Done is disabled while tendered < total, and clicking it anyway does nothing and never throws', async () => {
+    const onOrderComplete = vi.fn()
+    render(
+      <Harness
+        initial={[croissantLine]}
+        navigate={() => {}}
+        database={database}
+        onOrderComplete={onOrderComplete}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '1' }))
+    expect(screen.getByText('฿54 short')).toBeInTheDocument()
+
+    const doneButton = screen.getByRole('button', { name: 'Done' })
+    expect(doneButton).toBeDisabled()
+
+    expect(() => fireEvent.click(doneButton)).not.toThrow()
+    expect(onOrderComplete).not.toHaveBeenCalled()
+    expect(await database.orders.count()).toBe(0)
+  })
+
+  it('the keypad path stores the correct change once Done is enabled', async () => {
+    const onOrderComplete = vi.fn()
+    render(
+      <Harness
+        initial={[croissantLine]}
+        navigate={() => {}}
+        database={database}
+        onOrderComplete={onOrderComplete}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '6' }))
+    fireEvent.click(screen.getByRole('button', { name: '0' }))
+    expect(screen.getByText('Change ฿5')).toBeInTheDocument()
+
+    const doneButton = screen.getByRole('button', { name: 'Done' })
+    expect(doneButton).not.toBeDisabled()
+    fireEvent.click(doneButton)
+
+    await waitFor(() => expect(onOrderComplete).toHaveBeenCalledTimes(1))
+    const [order] = await database.orders.toArray()
+    expect(order).toMatchObject({
+      total: 5500,
+      payment: { method: 'cash', tendered: 6000, change: 500 },
+    })
+  })
+
+  it('the Delete key removes the last digit typed, and the bottom bar shows quick-tender notes again once the entry is empty', () => {
+    render(
+      <Harness
+        initial={[croissantLine]}
+        navigate={() => {}}
+        database={database}
+        onOrderComplete={() => {}}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '6' }))
+    expect(screen.getByRole('button', { name: 'Done' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete digit' }))
+
+    expect(screen.queryByRole('button', { name: 'Done' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Exact ฿55' })).toBeInTheDocument()
   })
 
   it('never calls fetch on the way to a completed cash sale', async () => {
