@@ -1,4 +1,5 @@
 import type { PosDatabase } from './db/db'
+import type { Order } from './domain/types'
 import type { Cart } from './hooks/useCart'
 
 /** Every screen in the app. Order here has no meaning beyond documentation. */
@@ -24,4 +25,14 @@ export interface ScreenProps {
   cart: Cart
   navigate: (screen: Screen) => void
   database: PosDatabase
+  /**
+   * Call once `completeOrder` has resolved. App clears the cart, returns to
+   * Sell and shows "Order #N — change ฿X" / "Order #N — paid". A checkout
+   * screen must not clear the cart or navigate on success itself. Call it
+   * exactly once per stored order, even if the screen has since unmounted —
+   * the order is already in Dexie, so the cart must still be cleared.
+   * `useCompleteOrder` does all of this; use it rather than calling
+   * `completeOrder` directly.
+   */
+  onOrderComplete: (order: Order) => void
 }

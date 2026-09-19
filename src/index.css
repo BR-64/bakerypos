@@ -396,3 +396,52 @@ body,
   background: var(--muted);
   color: #fff;
 }
+
+/* "Order #N — change ฿X" confirmation. Fixed over the top of the screen so
+   showing and hiding it never shifts the grid under a finger. */
+.order-toast-region {
+  position: fixed;
+  top: env(safe-area-inset-top);
+  left: 0;
+  right: 0;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.order-toast {
+  pointer-events: auto;
+  display: block;
+  width: calc(100% - 32px);
+  min-height: var(--tap);
+  margin: 8px 16px 0;
+  padding: 12px 16px;
+  border: none;
+  border-radius: 12px;
+  background: var(--fg);
+  color: var(--bg);
+  font: inherit;
+  font-size: 1.25rem;
+  font-weight: 700;
+  text-align: center;
+  touch-action: manipulation;
+}
+
+/* Shared by the Cash and PromptPay checkout screens (tasks 4 and 5); each
+   screen keeps the rest of its styles in its own src/screens/<Name>.css. */
+.checkout-total {
+  margin: 16px 0;
+  font-size: 3rem;
+  font-weight: 800;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.checkout-error {
+  margin: 8px 0;
+  padding: 12px 16px;
+  border: 2px solid #b3261e;
+  border-radius: 8px;
+  background: #fdecea;
+  color: #b3261e;
+  font-weight: 600;
+}

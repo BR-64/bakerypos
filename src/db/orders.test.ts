@@ -47,6 +47,66 @@ describe('completeOrder', () => {
     ).rejects.toThrow('balance')
   })
 
+  it('rejects negative change even when tendered - change balances (฿50 handed over for ฿55)', async () => {
+    const one = { ...croissant, qty: 1 } // ฿55
+    await expect(
+      completeOrder([one], { method: 'cash', tendered: 5000, change: -500 }, database),
+    ).rejects.toThrow('non-negative')
+    expect(await database.orders.count()).toBe(0)
+  })
+
+  it.each([
+    ['fractional tendered', { tendered: 11000.5, change: 0.5 }],
+    ['negative tendered', { tendered: -1, change: -11001 }],
+    ['NaN tendered', { tendered: NaN, change: 0 }],
+    ['unsafe tendered', { tendered: 2 ** 53, change: 2 ** 53 - 11000 }],
+  ])('rejects cash with %s', async (_label, amounts) => {
+    await expect(
+      completeOrder([croissant], { method: 'cash', ...amounts }, database),
+    ).rejects.toThrow('non-negative')
+    expect(await database.orders.count()).toBe(0)
+  })
+
+  it('accepts exact cash for a ฿0 cart of free items', async () => {
+    const free = { productId: 'p-water', name: 'Water', unitPrice: 0, qty: 1 }
+    const o = await completeOrder([free], { method: 'cash', tendered: 0, change: 0 }, database)
+    expect(o.total).toBe(0)
+  })
+
+  it('rejects a PromptPay order for ฿0', async () => {
+    const free = { productId: 'p-water', name: 'Water', unitPrice: 0, qty: 1 }
+    await expect(
+      completeOrder(
+        [free],
+        { method: 'promptpay', confirmedAt: new Date().toISOString() },
+        database,
+      ),
+    ).rejects.toThrow('฿0')
+    expect(await database.orders.count()).toBe(0)
+  })
+
+  it.each([
+    ['a fractional price', [{ ...croissant, unitPrice: 55.5 }]],
+    ['a zero qty', [{ ...croissant, qty: 0 }]],
+    ['a duplicate productId', [croissant, { ...croissant }]],
+    [
+      'a total that overflows',
+      [
+        { productId: 'p-a', name: 'A', unitPrice: Number.MAX_SAFE_INTEGER, qty: 1 },
+        { productId: 'p-b', name: 'B', unitPrice: 1, qty: 1 },
+      ],
+    ],
+  ])('rejects lines with %s and stores nothing', async (_label, lines) => {
+    await expect(
+      completeOrder(
+        lines,
+        { method: 'promptpay', confirmedAt: new Date().toISOString() },
+        database,
+      ),
+    ).rejects.toThrow('invalid lines')
+    expect(await database.orders.count()).toBe(0)
+  })
+
   it('accepts a promptpay order', async () => {
     const o = await completeOrder(
       [croissant],

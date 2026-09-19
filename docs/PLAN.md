@@ -96,17 +96,80 @@ Files already in place from the scaffold: `src/domain/{types,money}.ts` (+tests)
       a forced error in the Cart screen shows Try again/Back to Sell/Reload, with the cart intact
       after either recovery path and no Back to Sell on Sell's own boundary.
 
-- [ ] **4. Cash checkout.** `src/screens/CashScreen.tsx`: quick-tender buttons from
-      `quickTenderOptions`, keypad, change due, Done calls `completeOrder`. Returns to Sell with
-      an empty cart and a brief "Order #N — change ฿X" toast.
-      _Accept:_ test — Done with tendered < total is disabled; a completed order appears in Dexie
-      with the correct `change`.
+- [ ] **4. Cash checkout.** Builds on the shared checkout commit already on master — do not edit
+      any of it: `ScreenProps.onOrderComplete` (App clears the cart, returns to Sell and shows
+      "Order #N — change ฿X" via `OrderToast`), `useCompleteOrder` (the only way to store a sale:
+      synchronous double-tap guard, `pending`/`error`, calls `onOrderComplete` exactly once),
+      hardened `completeOrder` (rejects invalid lines and negative/fractional cash), and the
+      `.checkout-total`/`.checkout-error` classes. `src/domain/tender.ts`: whole-baht keypad
+      entry (`pressDigit`, `deleteDigit`, `entryToSatang`, max 6 digits, leading zeros dropped,
+      no "." key — a satang total is paid with "Exact") and `cashPayment(total, tendered)`
+      returning a `CashPayment` via `changeDue`, or `null` when tendered < total, so `changeDue`
+      is never called with too little. `src/screens/CashScreen.tsx` (+ `CashScreen.css`, classes
+      prefixed `cash-`): "Back to Cart"; big total (`.checkout-total`); keypad (keys ≥ 56px) with
+      the entered amount and, once tendered ≥ total, the change due in very large type
+      (otherwise "฿X short"). A bottom bar the same height and position as Sell's cart bar holds
+      the `quickTenderOptions(total)` buttons ("Exact ฿X" first) while the keypad is empty — one
+      tap completes the sale (Cart → Cash → note = two taps) — and **Done** (disabled until
+      tendered ≥ total) once digits are entered. All buttons incl. Back are disabled while
+      `pending`; on failure the cart is kept, `error` shows in a `role="alert"` and buttons
+      re-enable; on success the screen does nothing itself. A ฿0 cart (free items) completes with
+      "Exact ฿0". Empty cart: "Cart is empty." + Back, never calls `complete`. No
+      `role="status"`/`<output>` in the screen (App's toast owns that role). No new dependencies,
+      no schema change, no network.
+      Files (only these): `src/domain/tender.ts`, `src/domain/tender.test.ts`,
+      `src/screens/CashScreen.tsx`, `src/screens/CashScreen.test.tsx`,
+      `src/screens/CashScreen.css`, `src/App.cash.test.tsx` (rewrite it around the real screen,
+      dropping the "Simulate sale" placeholder mock), and in `src/App.tsx` only the `cash:`
+      registry line (→ `cash: (props) => <CashScreen {...props} />,`) and one `CashScreen` import
+      line inserted directly after the `CartScreen` import. Do not tick this box — 4 and 5 are
+      ticked together at merge.
+      _Accept:_ unit tests for `tender.ts`; Testing Library tests around the real `useCart` and a
+      fresh `PosDatabase` — "Exact" stores `{method: 'cash', tendered: total, change: 0}` and
+      calls `onOrderComplete` once; ฿500 stores the correct `change`; Done is disabled while
+      tendered < total and nothing throws; the keypad path stores the correct change; under
+      StrictMode a double tap creates exactly one order; a rejected save shows an error, keeps
+      the cart and a retry creates one order; an empty cart never writes; `fetch` is never
+      called; `App.cash.test.tsx` goes Sell → Cart → Cash → Exact → Sell with the toast and an
+      empty cart. `npm test`, `npm run typecheck` and `npm run lint` pass.
 
-- [ ] **5. PromptPay checkout.** `src/screens/PromptPayScreen.tsx`: QR from `promptpay-qr` with
-      the shop's PromptPay ID (from settings, task 7 — for now a constant in
-      `src/config.ts`) and the exact amount; "Paid — done" calls `completeOrder`.
-      _Accept:_ test — the generated payload contains the amount in baht with two decimals; order
-      stored with `method: 'promptpay'`.
+- [ ] **5. PromptPay checkout.** Builds on the same shared commit (do not edit any of it).
+      `src/config.ts` `PROMPTPAY_ID` (digits only; the placeholder is the obviously fake
+      `'0000000000'`; task 7 moves it to settings). `src/domain/promptpay.ts`:
+      `isValidPromptPayId` (10-digit phone starting with 0, or 13 digits), `formatPromptPayAmount`
+      (satang → "110.00" with integer maths), and `promptPayPayload(id, total)` calling
+      `promptpay-qr` (default import; it type-checks as is) with `total / 100` and throwing
+      unless the payload's field 54 equals the integer-built amount; it throws for total ≤ 0
+      (the library would emit an amount-less static QR), non-safe-integers and amounts over 13
+      characters. `src/screens/PromptPayScreen.tsx` (+ `PromptPayScreen.css`, classes prefixed
+      `promptpay-`; optional `promptPayId` prop defaulting to `PROMPTPAY_ID`): "Cancel" back to
+      Cart; big total (`.checkout-total`); `QRCodeSVG` (not Canvas — jsdom has no canvas) with a
+      quiet zone, white background and a `title`; while the ID is still the placeholder, a
+      visible "Test PromptPay ID — not a real account" warning above the QR; "Paid — done" in
+      the bottom bar calls `useCompleteOrder`'s `complete({method: 'promptpay', confirmedAt:
+      now})`; everything disabled while `pending`; failure keeps the cart and shows `error` in a
+      `role="alert"`. States: ฿0 total → "Nothing to charge — use Cash", no QR, Paid disabled;
+      invalid ID → "PromptPay isn't set up", no QR; empty cart → empty state. No
+      `role="status"`/`<output>` in the screen. QR is rendered locally — no network. Verify the
+      screen in `npm run dev` and in `npm run build && npm run preview` in a real browser
+      (`promptpay-qr` → `crc` → `buffer`, which tests in Node cannot catch); if the browser build
+      fails there, stop and report rather than adding a dependency.
+      Files (only these): `src/config.ts`, `src/domain/promptpay.ts`,
+      `src/domain/promptpay.test.ts`, `src/screens/PromptPayScreen.tsx`,
+      `src/screens/PromptPayScreen.test.tsx`, `src/screens/PromptPayScreen.css`,
+      `src/App.promptpay.test.tsx` (rewrite it around the real screen, dropping the "Simulate
+      sale" placeholder mock), and in `src/App.tsx` only the `promptpay:` registry line (→
+      `promptpay: (props) => <PromptPayScreen {...props} />,`) and one `PromptPayScreen` import
+      line inserted directly after the `PlaceholderScreen` import. Do not tick this box.
+      _Accept:_ unit tests — the payload contains the amount in baht with two decimals
+      (`5406110.00`, `540545.50`, `54040.05`), is dynamic (`010212`), and its last 4 characters
+      match a CRC16 computed independently in the test; 0/negative/fractional amounts and bad IDs
+      throw. Screen tests — the QR's value equals `promptPayPayload(id, total)`; "Paid — done"
+      stores `method: 'promptpay'` with a valid `confirmedAt` and calls `onOrderComplete` once;
+      StrictMode double tap → one order; rejection keeps the cart; ฿0 shows no QR and never
+      writes; the placeholder ID shows the test-ID warning; `fetch` is never called;
+      `App.promptpay.test.tsx` goes Sell → Cart → PromptPay → Paid → Sell with "Order #N — paid".
+      `npm test`, `npm run typecheck` and `npm run lint` pass.
 
 - [ ] **6. Orders + void.** `src/screens/OrdersScreen.tsx` (today's orders) and detail with
       Void (reason + confirm) via `voidOrder`. Bottom nav: Sell / Orders / Report / Admin.

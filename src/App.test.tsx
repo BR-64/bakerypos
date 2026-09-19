@@ -89,27 +89,10 @@ describe('App', () => {
     expect(bar).toBeDisabled()
   })
 
-  it('goes Sell -> Cart -> Cash placeholder -> Back to Sell with the cart intact', async () => {
+  it('shows no order confirmation before any sale', async () => {
     render(<App database={database} />)
-
-    const croissantTile = await screen.findByRole('button', { name: /Croissant/ })
-    fireEvent.click(croissantTile)
-    await waitFor(() => {
-      expect(document.querySelector('.cart-bar-total')?.textContent).toBe('฿55')
-    })
-
-    fireEvent.click(screen.getByRole('button', { name: /Cart:/ }))
-    await screen.findByRole('heading', { name: 'Cart' })
-
-    fireEvent.click(screen.getByRole('button', { name: 'Cash' }))
-
-    expect(await screen.findByRole('heading', { name: 'Cash' })).toBeInTheDocument()
-    expect(screen.getByText('Coming soon')).toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Back to Sell' }))
-
-    await screen.findByRole('button', { name: /Cart:/ })
-    expect(document.querySelector('.cart-bar-total')?.textContent).toBe('฿55')
+    await screen.findByRole('button', { name: /Croissant/ })
+    expect(screen.getByRole('status')).toBeEmptyDOMElement()
   })
 
   it('never calls fetch', async () => {
