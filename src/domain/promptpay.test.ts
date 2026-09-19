@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  canEncodePromptPayAmount,
   formatPromptPayAmount,
-  isPromptPayAmountTooLarge,
   isValidPromptPayId,
   promptPayPayload,
 } from './promptpay'
@@ -94,15 +94,15 @@ describe('formatPromptPayAmount', () => {
   })
 })
 
-describe('isPromptPayAmountTooLarge', () => {
-  it('is false right up to the 13-character amount-field boundary, true just past it', () => {
-    expect(isPromptPayAmountTooLarge(999999999999)).toBe(false) // "9999999999.99" (13 chars)
-    expect(isPromptPayAmountTooLarge(1000000000000)).toBe(true) // "10000000000.00" (14 chars)
+describe('canEncodePromptPayAmount', () => {
+  it('is true right up to the 13-character amount-field boundary, false just past it', () => {
+    expect(canEncodePromptPayAmount(999999999999)).toBe(true) // "9999999999.99" (13 chars)
+    expect(canEncodePromptPayAmount(1000000000000)).toBe(false) // "10000000000.00" (14 chars)
   })
 
-  it('is true (never throws) for an amount that cannot even be formatted', () => {
-    expect(isPromptPayAmountTooLarge(Number.NaN)).toBe(true)
-    expect(isPromptPayAmountTooLarge(45.5)).toBe(true)
+  it('is false (never throws) for an amount that cannot even be formatted, including a fractional total', () => {
+    expect(canEncodePromptPayAmount(Number.NaN)).toBe(false)
+    expect(canEncodePromptPayAmount(45.5)).toBe(false)
   })
 })
 

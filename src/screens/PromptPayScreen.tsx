@@ -3,11 +3,7 @@ import './PromptPayScreen.css'
 import { PLACEHOLDER_PROMPTPAY_ID, PROMPTPAY_ID } from '../config'
 import { db, type PosDatabase } from '../db/db'
 import { formatBaht } from '../domain/money'
-import {
-  isPromptPayAmountTooLarge,
-  isValidPromptPayId,
-  promptPayPayload,
-} from '../domain/promptpay'
+import { canEncodePromptPayAmount, isValidPromptPayId, promptPayPayload } from '../domain/promptpay'
 import type { Order } from '../domain/types'
 import { useCompleteOrder } from '../hooks/useCompleteOrder'
 import type { Cart } from '../hooks/useCart'
@@ -43,10 +39,10 @@ export function PromptPayScreen({
 
   const isEmpty = cart.lines.length === 0
   const isZero = cart.total <= 0
-  const isTooLarge = isPromptPayAmountTooLarge(cart.total)
+  const amountFits = canEncodePromptPayAmount(cart.total)
   const idValid = isValidPromptPayId(promptPayId)
   const isTestId = promptPayId === PLACEHOLDER_PROMPTPAY_ID
-  const showQr = !isEmpty && !isZero && !isTooLarge && idValid
+  const showQr = !isEmpty && !isZero && amountFits && idValid
   const payload = showQr ? promptPayPayload(promptPayId, cart.total) : null
 
   return (
@@ -77,7 +73,7 @@ export function PromptPayScreen({
 
           {isZero ? (
             <p className="promptpay-message muted">Nothing to charge — use Cash</p>
-          ) : isTooLarge ? (
+          ) : !amountFits ? (
             <p className="promptpay-message muted">
               Amount too large for a PromptPay QR — use Cash
             </p>

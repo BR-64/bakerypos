@@ -93,7 +93,7 @@ describe('PromptPayScreen', () => {
     expect(screen.getByText('Test PromptPay ID — not a real account')).toBeInTheDocument()
   })
 
-  it('hides the test-ID warning once a real-looking ID is configured, with no prop override', () => {
+  it('hides the test-ID warning for a real-looking ID passed via a prop override', () => {
     render(<Harness initial={[croissantLine]} promptPayId="0812345678" />)
     expect(screen.queryByText('Test PromptPay ID — not a real account')).not.toBeInTheDocument()
   })
@@ -145,7 +145,7 @@ describe('PromptPayScreen', () => {
     expect(await database.orders.count()).toBe(1)
   })
 
-  it('everything is disabled while a save is pending, then re-enables once it resolves', async () => {
+  it('everything is disabled while a save is pending, and releasing it stores the order and calls onOrderComplete', async () => {
     // Hold the real transaction behind a promise this test controls, rather
     // than replacing it outright, so the order still actually gets stored
     // once released.

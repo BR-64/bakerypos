@@ -31,18 +31,19 @@ export function formatPromptPayAmount(total: Satang): string {
 }
 
 /**
- * True if `total` is too large to fit in the payload's amount field once
- * formatted — including when it can't even be formatted (e.g. not a safe
- * integer). `cart.total` is derived from Dexie product prices, which
- * CLAUDE.md treats as untrusted, so a checkout screen calls this *before*
- * `promptPayPayload` to decide whether to build a QR at all, rather than
- * relying on catching that function's throw during render.
+ * True if `total` can be formatted and fits in the payload's amount field —
+ * false for anything that can't even be formatted (e.g. not a safe integer,
+ * including a fractional total) as well as one that's simply too long.
+ * `cart.total` is derived from Dexie product prices, which CLAUDE.md treats
+ * as untrusted, so a checkout screen calls this *before* `promptPayPayload`
+ * to decide whether to build a QR at all, rather than relying on catching
+ * that function's throw during render.
  */
-export function isPromptPayAmountTooLarge(total: Satang): boolean {
+export function canEncodePromptPayAmount(total: Satang): boolean {
   try {
-    return formatPromptPayAmount(total).length > 13
+    return formatPromptPayAmount(total).length <= 13
   } catch {
-    return true
+    return false
   }
 }
 

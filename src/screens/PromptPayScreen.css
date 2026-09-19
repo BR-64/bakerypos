@@ -55,8 +55,10 @@
   padding-right: 20px;
   /* Opaque: a sticky bar over scrollable content must never show the grid
      through it, and this bar (unlike .cart-bar) has no background of its
-     own from a shared rule. */
-  background: #2f6f4e;
+     own from a shared rule. Neutral, not the button's green — sharing that
+     colour with the enabled Paid button made the whole inset strip (not
+     just the button) look tappable. */
+  background: var(--bg);
 }
 
 .promptpay-paid-button {
