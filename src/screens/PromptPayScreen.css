@@ -1,0 +1,56 @@
+/*
+ * PromptPay checkout screen. Shared checkout layout (.screen, .screen-header,
+ * .back-button, .bottom-bar, .checkout-total, .checkout-error) lives in
+ * src/index.css; everything specific to this screen lives here, prefixed
+ * `promptpay-`.
+ */
+
+.promptpay-message {
+  padding: 24px 4px;
+}
+
+.promptpay-qr-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin: 8px 0 24px;
+}
+
+.promptpay-warning {
+  margin: 0;
+  padding: 8px 16px;
+  border: 2px solid #b3261e;
+  border-radius: 8px;
+  background: #fdecea;
+  color: #b3261e;
+  font-weight: 600;
+  text-align: center;
+}
+
+.promptpay-qr {
+  background: #fff;
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.promptpay-bottom-bar {
+  padding: 12px 20px;
+}
+
+.promptpay-paid-button {
+  width: 100%;
+  min-height: var(--tap);
+  border: none;
+  border-radius: 8px;
+  background: #2f6f4e;
+  color: #fff;
+  font: inherit;
+  font-size: 1.1rem;
+  font-weight: 700;
+  touch-action: manipulation;
+}
+
+.promptpay-paid-button:disabled {
+  background: var(--muted);
+}
