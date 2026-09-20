@@ -69,3 +69,143 @@
   margin-top: 12px;
   padding: 8px 4px;
 }
+
+.orders-detail-missing {
+  padding: 24px 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.orders-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.orders-detail-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.1rem;
+  margin: 16px 0 0;
+}
+
+.orders-detail-time {
+  margin: 0 0 12px;
+}
+
+.orders-detail-lines {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.orders-detail-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid rgb(0 0 0 / 0.08);
+}
+
+.orders-detail-total {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin: 8px 0;
+}
+
+.orders-detail-payment {
+  margin: 0 0 16px;
+}
+
+.orders-detail-void-reason {
+  margin: 0;
+}
+
+.orders-void-button {
+  min-height: var(--tap);
+  padding: 0 16px;
+  border: 2px solid #b3261e;
+  border-radius: 8px;
+  background: transparent;
+  color: #b3261e;
+  font: inherit;
+  font-weight: 600;
+  touch-action: manipulation;
+}
+
+.orders-void-confirm {
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--tile);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.orders-void-reasons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.orders-void-reason-button {
+  min-height: var(--tap);
+  padding: 0 14px;
+  border: 2px solid var(--accent);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 600;
+  touch-action: manipulation;
+}
+
+.orders-void-reason-button[aria-pressed='true'] {
+  background: var(--accent);
+  color: #fff;
+}
+
+.orders-void-other-input {
+  min-height: var(--tap);
+  padding: 0 12px;
+  border: 2px solid var(--accent);
+  border-radius: 8px;
+  font: inherit;
+}
+
+.orders-void-confirm-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.orders-void-keep,
+.orders-void-yes {
+  min-height: var(--tap);
+  flex: 1;
+  border: none;
+  border-radius: 8px;
+  font: inherit;
+  font-weight: 600;
+  touch-action: manipulation;
+}
+
+.orders-void-keep {
+  background: transparent;
+  color: var(--accent);
+  border: 2px solid var(--accent);
+}
+
+.orders-void-yes {
+  background: #b3261e;
+  color: #fff;
+}
+
+.orders-void-yes:disabled {
+  background: var(--muted);
+}

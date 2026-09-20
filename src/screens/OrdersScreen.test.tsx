@@ -1,4 +1,5 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { StrictMode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PosDatabase } from '../db/db'
 import { completeOrder } from '../db/orders'
@@ -126,6 +127,200 @@ describe('OrdersScreen', () => {
     expect(await screen.findByText(/something went wrong/i)).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /try again/i }))
 
+    expect(await screen.findByText('No orders yet today.')).toBeInTheDocument()
+  })
+})
+
+describe('OrdersScreen — detail and void', () => {
+  it('tapping a row opens the detail with snapshot lines, stored total and cash tendered/change', async () => {
+    await completeOrder([croissant], { method: 'cash', tendered: 10000, change: 4500 }, database)
+
+    render(<OrdersScreen database={database} />)
+    fireEvent.click(await screen.findByRole('button', { name: /#1/ }))
+
+    expect(await screen.findByRole('heading', { name: /Order #1/ })).toBeInTheDocument()
+    expect(screen.getByText('Croissant × 1')).toBeInTheDocument()
+    expect(screen.getByText('Total ฿55')).toBeInTheDocument()
+    expect(screen.getByText(/tendered ฿100/)).toBeInTheDocument()
+    expect(screen.getByText(/change ฿45/)).toBeInTheDocument()
+  })
+
+  it('Back returns to the list', async () => {
+    await completeOrder([croissant], { method: 'cash', tendered: 5500, change: 0 }, database)
+    render(<OrdersScreen database={database} />)
+    fireEvent.click(await screen.findByRole('button', { name: /#1/ }))
+    await screen.findByRole('heading', { name: /Order #1/ })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }))
+
+    expect(await screen.findByRole('button', { name: /#1/ })).toBeInTheDocument()
+  })
+
+  it('"Yes, void" is disabled until a reason is picked, then voids and live-updates the detail', async () => {
+    const order = await completeOrder(
+      [croissant],
+      { method: 'cash', tendered: 5500, change: 0 },
+      database,
+    )
+    render(<OrdersScreen database={database} />)
+    fireEvent.click(await screen.findByRole('button', { name: /#1/ }))
+    await screen.findByRole('heading', { name: /Order #1/ })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Void this order' }))
+    const yesVoid = screen.getByRole('button', { name: 'Yes, void' })
+    expect(yesVoid).toBeDisabled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Duplicate order' }))
+    expect(yesVoid).not.toBeDisabled()
+
+    fireEvent.click(yesVoid)
+
+    await waitFor(() => {
+      expect(screen.getByText(/Void reason: Duplicate order/)).toBeInTheDocument()
+    })
+    expect(screen.queryByRole('button', { name: 'Void this order' })).not.toBeInTheDocument()
+    expect(screen.getAllByText('Voided').length).toBeGreaterThan(0)
+
+    const stored = await database.orders.get(order.id)
+    expect(stored?.status).toBe('voided')
+    expect(stored?.voidReason).toBe('Duplicate order')
+    expect(stored?.voidedAt).toBeTruthy()
+  })
+
+  it('"Other…" requires typed text before "Yes, void" enables', async () => {
+    await completeOrder([croissant], { method: 'cash', tendered: 5500, change: 0 }, database)
+    render(<OrdersScreen database={database} />)
+    fireEvent.click(await screen.findByRole('button', { name: /#1/ }))
+    await screen.findByRole('heading', { name: /Order #1/ })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Void this order' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Other' }))
+    const yesVoid = screen.getByRole('button', { name: 'Yes, void' })
+    expect(yesVoid).toBeDisabled()
+
+    fireEvent.change(screen.getByLabelText('Void reason'), { target: { value: '  Stale item  ' } })
+    expect(yesVoid).not.toBeDisabled()
+
+    fireEvent.click(yesVoid)
+    await waitFor(() => {
+      expect(screen.getByText('Void reason: Stale item')).toBeInTheDocument()
+    })
+  })
+
+  it('"Keep order" cancels without voiding', async () => {
+    const order = await completeOrder(
+      [croissant],
+      { method: 'cash', tendered: 5500, change: 0 },
+      database,
+    )
+    render(<OrdersScreen database={database} />)
+    fireEvent.click(await screen.findByRole('button', { name: /#1/ }))
+    await screen.findByRole('heading', { name: /Order #1/ })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Void this order' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Duplicate order' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Keep order' }))
+
+    expect(screen.getByRole('button', { name: 'Void this order' })).toBeInTheDocument()
+    const stored = await database.orders.get(order.id)
+    expect(stored?.status).toBe('completed')
+  })
+
+  it('a StrictMode double tap on "Yes, void" voids exactly once', async () => {
+    await completeOrder([croissant], { method: 'cash', tendered: 5500, change: 0 }, database)
+    render(
+      <StrictMode>
+        <OrdersScreen database={database} />
+      </StrictMode>,
+    )
+    fireEvent.click(await screen.findByRole('button', { name: /#1/ }))
+    await screen.findByRole('heading', { name: /Order #1/ })
+    fireEvent.click(screen.getByRole('button', { name: 'Void this order' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Duplicate order' }))
+
+    const yesVoid = screen.getByRole('button', { name: 'Yes, void' })
+    fireEvent.click(yesVoid)
+    fireEvent.click(yesVoid)
+
+    await waitFor(() => {
+      expect(screen.getByText(/Void reason: Duplicate order/)).toBeInTheDocument()
+    })
+    expect(await database.orders.count()).toBe(1)
+  })
+
+  it('a rejected void shows a role="alert" and leaves the order completed', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const order = await completeOrder(
+      [croissant],
+      { method: 'cash', tendered: 5500, change: 0 },
+      database,
+    )
+    const updateSpy = vi
+      .spyOn(database.orders, 'update')
+      .mockRejectedValueOnce(new Error('disk full'))
+
+    render(<OrdersScreen database={database} />)
+    fireEvent.click(await screen.findByRole('button', { name: /#1/ }))
+    await screen.findByRole('heading', { name: /Order #1/ })
+    fireEvent.click(screen.getByRole('button', { name: 'Void this order' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Duplicate order' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, void' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/couldn't void/i)
+    const stored = await database.orders.get(order.id)
+    expect(stored?.status).toBe('completed')
+    updateSpy.mockRestore()
+  })
+
+  it('a voided order shows the badge and reason instead of a Void button', async () => {
+    await database.orders.add(
+      makeOrder({
+        id: 'o-voided',
+        number: 1,
+        status: 'voided',
+        voidReason: 'already voided',
+      }),
+    )
+    render(<OrdersScreen database={database} />)
+    fireEvent.click(await screen.findByRole('button', { name: /#1/ }))
+
+    expect(await screen.findByText('Void reason: already voided')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Void this order' })).not.toBeInTheDocument()
+  })
+
+  it('skips a corrupt line in the detail, logs it once, counts it, and still allows voiding', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    await database.orders.add(
+      makeOrder({
+        id: 'o-1',
+        number: 1,
+        lines: [croissant, { productId: '', name: '', unitPrice: -1, qty: 0 }],
+      }),
+    )
+    render(<OrdersScreen database={database} />)
+    fireEvent.click(await screen.findByRole('button', { name: /#1/ }))
+
+    expect(await screen.findByText('Croissant × 1')).toBeInTheDocument()
+    expect(screen.getByText("1 item couldn't be displayed.")).toBeInTheDocument()
+    expect(errorSpy).toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Void this order' }))
+    expect(screen.getByRole('button', { name: 'Yes, void' })).toBeInTheDocument()
+  })
+
+  it('shows a message, and never auto-navigates, if the open order becomes unavailable', async () => {
+    await database.orders.add(makeOrder({ id: 'o-1', number: 1 }))
+    render(<OrdersScreen database={database} />)
+    fireEvent.click(await screen.findByRole('button', { name: /#1/ }))
+    await screen.findByRole('heading', { name: /Order #1/ })
+
+    // Corrupt the order in place (an unknown status fails isValidOrder's
+    // header check), simulating it rolling out of "today" or otherwise
+    // becoming invalid while its detail is open.
+    await database.orders.update('o-1', { status: 'refunded' } as unknown as Partial<Order>)
+
+    expect(await screen.findByText('This order is no longer available.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }))
     expect(await screen.findByText('No orders yet today.')).toBeInTheDocument()
   })
 })
