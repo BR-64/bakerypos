@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useState, type ReactNode, type SyntheticEvent } from 'react'
 import { BottomNav } from './components/BottomNav'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { OrderToast } from './components/OrderToast'
@@ -6,6 +6,7 @@ import { db, type PosDatabase } from './db/db'
 import { seedIfEmpty } from './db/seed'
 import type { Order } from './domain/types'
 import { useCart } from './hooks/useCart'
+import { useTapShield } from './hooks/useTapShield'
 import {
   HOME_SCREEN,
   SCREEN_TITLES,
@@ -62,6 +63,7 @@ export default function App({ database = db }: { database?: PosDatabase }) {
   const [screen, setScreen] = useState<Screen>(HOME_SCREEN)
   const [retryKey, setRetryKey] = useState(0)
   const [completedOrder, setCompletedOrder] = useState<Order | null>(null)
+  const shield = useTapShield()
 
   // setState's dispatch function is already stable across renders, so
   // `navigate` is too — no useCallback needed.
@@ -69,15 +71,36 @@ export default function App({ database = db }: { database?: PosDatabase }) {
 
   // A checkout screen calls this after `completeOrder` resolves: the sale is
   // stored, so empty the cart, go back to Sell and confirm it on screen.
+  // Raising the shield here (not inside the checkout screen) means it fires
+  // exactly once per completed sale, right as App swaps the screen back to
+  // Sell in the same gesture that just paid — the moment a stray tap could
+  // otherwise land on a product tile now sitting where "Done" used to be.
   const onOrderComplete = useCallback(
     (order: Order) => {
+      shield.raise()
       clear()
       setCompletedOrder(order)
       setScreen(HOME_SCREEN)
     },
-    [clear],
+    [clear, shield],
   )
   const dismissOrderToast = useCallback(() => setCompletedOrder(null), [])
+
+  // Capture-phase, not a CSS overlay: jsdom does no hit-testing, so an
+  // overlay's tests would pass while the real behaviour stayed broken.
+  // Stopping propagation during capture means the tap never reaches
+  // anything inside `.screen-wrap` (the tile's own onClick, CartBar's
+  // onOpen, …) — the toast and the bottom nav are siblings of this wrapper,
+  // outside it entirely, so they're untouched and stay tappable throughout.
+  const guardWhileShielded = useCallback(
+    (event: SyntheticEvent) => {
+      if (shield.active) {
+        event.preventDefault()
+        event.stopPropagation()
+      }
+    },
+    [shield.active],
+  )
 
   const Entry = screens[screen]
   const showNav = showsBottomNav(screen)
@@ -85,21 +108,30 @@ export default function App({ database = db }: { database?: PosDatabase }) {
   return (
     <>
       <div className={showNav ? 'app-shell app-shell-with-nav' : 'app-shell'}>
-        <ErrorBoundary
-          key={`${screen}:${retryKey}`}
-          onRetry={() => setRetryKey((k) => k + 1)}
-          onBack={screen === HOME_SCREEN ? undefined : () => setScreen(HOME_SCREEN)}
+        <div
+          className="screen-wrap"
+          onClickCapture={guardWhileShielded}
+          onPointerDownCapture={guardWhileShielded}
         >
-          <Entry
-            cart={cart}
-            navigate={navigate}
-            database={database}
-            onOrderComplete={onOrderComplete}
-          />
-        </ErrorBoundary>
-        {/* A sibling of the ErrorBoundary above, never its child: a crashed
-            screen must still leave the nav usable. Omitted entirely (not
-            just hidden) on cart/cash/promptpay, per `showsBottomNav`. */}
+          <ErrorBoundary
+            key={`${screen}:${retryKey}`}
+            onRetry={() => setRetryKey((k) => k + 1)}
+            onBack={screen === HOME_SCREEN ? undefined : () => setScreen(HOME_SCREEN)}
+          >
+            <Entry
+              cart={cart}
+              navigate={navigate}
+              database={database}
+              onOrderComplete={onOrderComplete}
+            />
+          </ErrorBoundary>
+        </div>
+        {/* A sibling of the tap-shielded wrapper (and so of the
+            ErrorBoundary) above, never a descendant of either: a crashed
+            screen must still leave the nav usable, and the shield that
+            briefly blocks stray taps right after a sale must never block
+            the nav. Omitted entirely (not just hidden) on cart/cash/
+            promptpay, per `showsBottomNav`. */}
         {showNav && <BottomNav screen={screen} navigate={navigate} />}
       </div>
       {/* Always mounted, so screen readers announce the toast when it appears. */}

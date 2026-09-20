@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { PosDatabase } from './db/db'
+import { TAP_SHIELD_MS } from './hooks/useTapShield'
 
 // App-level tests for the Cash checkout path, wired to the real CashScreen
 // (task 5's PromptPay path has its own file, App.promptpay.test.tsx, which
@@ -95,6 +96,13 @@ describe('App — Cash checkout', () => {
     await waitFor(() => {
       expect(screen.getByRole('status')).toHaveTextContent('Order #1')
     })
+
+    // Task 6's tap shield (src/hooks/useTapShield.ts) briefly blocks taps
+    // right after a sale so a stray tap from the same gesture can't start a
+    // new one — see src/App.shield.test.tsx. On a real phone, the time a
+    // cashier takes to add the next item dwarfs this; here the two sales
+    // happen back-to-back, so this waits the shield out first.
+    await new Promise((resolve) => setTimeout(resolve, TAP_SHIELD_MS))
 
     await addCroissantAndOpenCash()
     fireEvent.click(screen.getByRole('button', { name: 'Exact ฿55' }))
