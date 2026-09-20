@@ -341,7 +341,7 @@ Files already in place from the scaffold: `src/domain/{types,money}.ts` (+tests)
       for 60s; unlock expires after 5 minutes; recovery code resets the PIN; Sell → Cart → Cash
       never shows the prompt.
 
-- [ ] **8. PWA polish + device QA.** Offline indicator, install prompt hint, icon set (192/512
+- [x] **8. PWA polish + device QA.** Offline indicator, install prompt hint, icon set (192/512
       PNG), Lighthouse PWA pass, manual test in airplane mode on a real phone. Write
       `docs/DEVICE-QA.md` checklist.
       _Accept:_ `npm run build && npm run preview` installs on a phone and completes a cash sale
