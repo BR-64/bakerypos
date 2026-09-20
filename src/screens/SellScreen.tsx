@@ -7,9 +7,14 @@ import { ProductTile } from '../components/ProductTile'
 import { db, type PosDatabase } from '../db/db'
 import { sellableProducts } from '../db/products'
 import { partitionSellable } from '../domain/cart'
-import { productsInCategory, visibleCategories, type CategoryTab } from '../domain/categories'
+import {
+  CATEGORY_ORDER,
+  productsInCategory,
+  visibleCategories,
+  type CategoryTab,
+} from '../domain/categories'
 import { safeString } from '../domain/log'
-import type { Product } from '../domain/types'
+import type { Category, Product } from '../domain/types'
 import type { Cart } from '../hooks/useCart'
 import { useLogInvalidOnce } from '../hooks/useLogInvalidOnce'
 
@@ -17,6 +22,13 @@ export interface SellScreenProps {
   cart: Pick<Cart, 'add' | 'count' | 'total'>
   onOpenCart?: () => void
   database?: PosDatabase
+  /**
+   * Tab order, from the shop's `settings.categoryOrder` (Admin edits it).
+   * Defaults to `CATEGORY_ORDER` while the settings read is still in
+   * flight — unlike the PromptPay ID there is no wrong answer here, and a
+   * grid that waited for a read would be a slower first tap.
+   */
+  categoryOrder?: Category[]
 }
 
 /**
@@ -37,13 +49,18 @@ export interface SellScreenProps {
  * `ErrorBoundary` as a further safety net for anything unforeseen
  * elsewhere.
  */
-export function SellScreen({ cart, onOpenCart, database = db }: SellScreenProps) {
+export function SellScreen({
+  cart,
+  onOpenCart,
+  database = db,
+  categoryOrder = CATEGORY_ORDER,
+}: SellScreenProps) {
   const [retryKey, setRetryKey] = useState(0)
 
   return (
     <main className="app screen sell-screen">
       <ErrorBoundary key={retryKey} onRetry={() => setRetryKey((k) => k + 1)}>
-        <ProductGrid cart={cart} database={database} />
+        <ProductGrid cart={cart} database={database} categoryOrder={categoryOrder} />
       </ErrorBoundary>
       <CartBar count={cart.count} total={cart.total} onOpen={onOpenCart} />
     </main>
@@ -53,6 +70,7 @@ export function SellScreen({ cart, onOpenCart, database = db }: SellScreenProps)
 interface ProductGridProps {
   cart: Pick<Cart, 'add' | 'count' | 'total'>
   database: PosDatabase
+  categoryOrder: Category[]
 }
 
 /**
@@ -74,7 +92,7 @@ function describeInvalidProduct(product: Product): string {
   )
 }
 
-function ProductGrid({ cart, database }: ProductGridProps) {
+function ProductGrid({ cart, database, categoryOrder }: ProductGridProps) {
   const [selectedTab, setSelectedTab] = useState<CategoryTab>('all')
   const products = useLiveQuery(() => sellableProducts(database), [database])
 
@@ -89,7 +107,7 @@ function ProductGrid({ cart, database }: ProductGridProps) {
     return <p className="sell-screen-message muted">No products yet.</p>
   }
 
-  const categories = visibleCategories(sellable)
+  const categories = visibleCategories(sellable, categoryOrder)
   // If the previously-selected tab's category has disappeared (its last
   // product went out of scope, e.g. archived live while the screen was
   // open), fall back to "All" for both the grid and the tab's

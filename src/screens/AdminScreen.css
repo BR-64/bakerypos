@@ -1,0 +1,216 @@
+/* Admin screen. Nothing here is on the checkout path, but it is still used
+   one-handed on a phone: every control is at least 48px. */
+
+.admin-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.admin-title {
+  font-size: 1.25rem;
+  margin: 0 0 16px;
+}
+
+.admin-header .admin-title {
+  margin: 0;
+}
+
+.admin-lock-button {
+  min-height: var(--tap);
+  min-width: 88px;
+  padding: 0 16px;
+  border: 2px solid var(--accent);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 600;
+  touch-action: manipulation;
+}
+
+.admin-section {
+  margin-bottom: 24px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: var(--tile);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.1);
+}
+
+.admin-section-heading {
+  font-size: 1rem;
+  margin: 0 0 8px;
+}
+
+.admin-message {
+  margin: 0 0 8px;
+}
+
+.admin-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.admin-field-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.admin-input {
+  min-height: var(--tap);
+  width: 100%;
+  padding: 0 12px;
+  border: 2px solid var(--accent);
+  border-radius: 8px;
+  background: var(--bg);
+  color: inherit;
+  font: inherit;
+  touch-action: manipulation;
+}
+
+.admin-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.admin-saved {
+  font-weight: 600;
+}
+
+.admin-primary-button {
+  min-height: var(--tap);
+  padding: 0 20px;
+  border: none;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  touch-action: manipulation;
+}
+
+.admin-primary-button:disabled {
+  background: var(--muted);
+}
+
+.admin-secondary-button {
+  min-height: var(--tap);
+  padding: 0 16px;
+  border: 2px solid var(--accent);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 600;
+  touch-action: manipulation;
+}
+
+.admin-danger-button {
+  min-height: var(--tap);
+  padding: 0 16px;
+  border: none;
+  border-radius: 8px;
+  background: #b3261e;
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  touch-action: manipulation;
+}
+
+.admin-category-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.admin-category-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-category-name {
+  flex: 1;
+  font-weight: 600;
+}
+
+.admin-move-button {
+  min-height: var(--tap);
+  min-width: var(--tap);
+  border: none;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  font-size: 1.25rem;
+  touch-action: manipulation;
+}
+
+.admin-move-button:disabled {
+  background: var(--muted);
+}
+
+.admin-product-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.admin-product {
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgb(0 0 0 / 0.08);
+}
+
+.admin-product-row {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.admin-product-name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+}
+
+.admin-product-price {
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--fg);
+  color: var(--bg);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.admin-product-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-product-form {
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--bg);
+}

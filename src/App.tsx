@@ -6,19 +6,14 @@ import { db, type PosDatabase } from './db/db'
 import { seedIfEmpty } from './db/seed'
 import type { Order } from './domain/types'
 import { useCart } from './hooks/useCart'
+import { usePinLock } from './hooks/usePinLock'
 import { useSettings } from './hooks/useSettings'
 import { useTapShield } from './hooks/useTapShield'
-import {
-  HOME_SCREEN,
-  SCREEN_TITLES,
-  showsBottomNav,
-  type Screen,
-  type ScreenProps,
-} from './navigation'
+import { HOME_SCREEN, showsBottomNav, type Screen, type ScreenProps } from './navigation'
+import { AdminScreen } from './screens/AdminScreen'
 import { CartScreen } from './screens/CartScreen'
 import { CashScreen } from './screens/CashScreen'
 import { OrdersScreen } from './screens/OrdersScreen'
-import { PlaceholderScreen } from './screens/PlaceholderScreen'
 import { PromptPayScreen } from './screens/PromptPayScreen'
 import { ReportScreen } from './screens/ReportScreen'
 import { SellScreen } from './screens/SellScreen'
@@ -37,8 +32,16 @@ import { SellScreen } from './screens/SellScreen'
  * still need App-level additions for its bottom nav and order-detail view.
  */
 const screens: Record<Screen, (props: ScreenProps) => ReactNode> = {
-  sell: ({ cart, navigate, database }) => (
-    <SellScreen cart={cart} onOpenCart={() => navigate('cart')} database={database} />
+  sell: ({ cart, navigate, database, settings }) => (
+    <SellScreen
+      cart={cart}
+      onOpenCart={() => navigate('cart')}
+      database={database}
+      // `settings === null` (not loaded yet) falls back to the default tab
+      // order inside SellScreen: unlike the PromptPay ID there is no wrong
+      // answer, and the first tap must not wait on a read.
+      categoryOrder={settings?.categoryOrder}
+    />
   ),
   cart: ({ cart, navigate }) => <CartScreen cart={cart} navigate={navigate} />,
   cash: (props) => <CashScreen {...props} />,
@@ -48,12 +51,30 @@ const screens: Record<Screen, (props: ScreenProps) => ReactNode> = {
   // `settings` is unpacked rather than spread: PromptPayScreen takes the
   // one field it needs, and `null` (settings not loaded yet) travels
   // through as `null` so the screen can say so instead of guessing an ID.
-  promptpay: ({ settings, ...props }) => (
-    <PromptPayScreen {...props} promptPayId={settings === null ? null : settings.promptPayId} />
+  promptpay: ({ settings, settingsFailed, ...props }) => (
+    <PromptPayScreen
+      {...props}
+      promptPayId={settings === null ? null : settings.promptPayId}
+      settingsFailed={settingsFailed}
+    />
   ),
-  orders: ({ database }) => <OrdersScreen database={database} />,
+  orders: ({ database, settings, settingsFailed, pinLock }) => (
+    <OrdersScreen
+      database={database}
+      settings={settings}
+      settingsFailed={settingsFailed}
+      pinLock={pinLock}
+    />
+  ),
   report: ({ database, settings }) => <ReportScreen database={database} settings={settings} />,
-  admin: (props) => <PlaceholderScreen {...props} title={SCREEN_TITLES.admin} />,
+  admin: ({ database, settings, settingsFailed, pinLock }) => (
+    <AdminScreen
+      database={database}
+      settings={settings}
+      settingsFailed={settingsFailed}
+      pinLock={pinLock}
+    />
+  ),
 }
 
 export default function App({ database = db }: { database?: PosDatabase }) {
@@ -72,7 +93,15 @@ export default function App({ database = db }: { database?: PosDatabase }) {
   // the time anyone taps PromptPay — the checkout must not wait on a read
   // it could have started at launch. `useSettings` is safe this high up
   // (above every ErrorBoundary) because `getSettings` never rejects.
-  const settings = useSettings(database)
+  const { settings, failed: settingsFailed } = useSettings(database)
+
+  // The PIN lock lives here, above every ErrorBoundary and outside every
+  // screen, for two reasons: one unlock covers Admin and Void together for
+  // its 5 minutes, and the wrong-attempt count and 60-second lockout
+  // survive the prompt being unmounted — otherwise tapping Sell and then
+  // Admin again would wipe five wrong guesses. It is in-memory only, so
+  // closing the app locks everything again (docs/SPEC.md).
+  const pinLock = usePinLock()
 
   const [screen, setScreen] = useState<Screen>(HOME_SCREEN)
   const [retryKey, setRetryKey] = useState(0)
@@ -150,6 +179,8 @@ export default function App({ database = db }: { database?: PosDatabase }) {
               navigate={navigate}
               database={database}
               settings={settings}
+              settingsFailed={settingsFailed}
+              pinLock={pinLock}
               onOrderComplete={onOrderComplete}
             />
           </ErrorBoundary>

@@ -2,6 +2,7 @@ import type { PosDatabase } from './db/db'
 import type { Settings } from './domain/settings'
 import type { Order } from './domain/types'
 import type { Cart } from './hooks/useCart'
+import type { PinLock } from './hooks/usePinLock'
 
 /** Every screen in the app. Order here has no meaning beyond documentation. */
 export const SCREENS = ['sell', 'cart', 'cash', 'promptpay', 'orders', 'report', 'admin'] as const
@@ -53,6 +54,24 @@ export interface ScreenProps {
    * resolves to `DEFAULT_SETTINGS` inside `getSettings`.
    */
   settings: Settings | null
+  /**
+   * True when the settings **read failed**, as opposed to "there's no row
+   * yet" (the normal state until the first Admin save, which keeps using
+   * `DEFAULT_SETTINGS`). `settings` then holds defaults that were never
+   * stored, so a screen that would act on them has to say so instead:
+   * PromptPay shows "PromptPay isn't set up — use Cash" rather than a QR
+   * for the placeholder account, Admin won't overwrite what it couldn't
+   * read, and the PIN prompt refuses to offer the first-run set-PIN flow.
+   */
+  settingsFailed: boolean
+  /**
+   * The Admin PIN lock (`src/hooks/usePinLock.ts`), created once in App so
+   * the unlock, the wrong-attempt count and the 60-second lockout are
+   * shared by every screen that uses them (Admin, and Void inside Orders)
+   * and survive navigating away and back. Sell, Cart, checkout and Report
+   * never touch it.
+   */
+  pinLock: PinLock
   /**
    * Call once `completeOrder` has resolved. App clears the cart, returns to
    * Sell and shows "Order #N — change ฿X" / "Order #N — paid". A checkout

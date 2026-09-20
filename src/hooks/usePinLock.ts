@@ -50,6 +50,12 @@ export function usePinLock(): PinLock {
   const [failures, setFailures] = useState(0)
   const [tick, setTick] = useState(0)
 
+  // Reading the clock during render is impure, and here that is the point:
+  // a stored "now" updated only by a timer would keep reporting `unlocked`
+  // after a backgrounded phone throttled that timer, which is the one
+  // direction this must never fail in. `tick` below forces the re-render at
+  // each deadline; this line decides the answer.
+  // eslint-disable-next-line react/purity
   const now = Date.now()
   const unlocked = unlockedUntil !== null && now < unlockedUntil
   const lockoutMsLeft = lockedUntil !== null && now < lockedUntil ? lockedUntil - now : 0
