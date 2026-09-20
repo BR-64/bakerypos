@@ -6,6 +6,7 @@ import { db, type PosDatabase } from './db/db'
 import { seedIfEmpty } from './db/seed'
 import type { Order } from './domain/types'
 import { useCart } from './hooks/useCart'
+import { useSettings } from './hooks/useSettings'
 import { useTapShield } from './hooks/useTapShield'
 import {
   HOME_SCREEN,
@@ -43,7 +44,12 @@ const screens: Record<Screen, (props: ScreenProps) => ReactNode> = {
   // Keep this comment between `cash` and `promptpay`: tasks 4 and 5 each
   // change one of those lines on separate branches, and git treats edits to
   // adjacent lines as a conflict.
-  promptpay: (props) => <PromptPayScreen {...props} />,
+  // `settings` is unpacked rather than spread: PromptPayScreen takes the
+  // one field it needs, and `null` (settings not loaded yet) travels
+  // through as `null` so the screen can say so instead of guessing an ID.
+  promptpay: ({ settings, ...props }) => (
+    <PromptPayScreen {...props} promptPayId={settings === null ? null : settings.promptPayId} />
+  ),
   orders: ({ database }) => <OrdersScreen database={database} />,
   report: (props) => <PlaceholderScreen {...props} title={SCREEN_TITLES.report} />,
   admin: (props) => <PlaceholderScreen {...props} title={SCREEN_TITLES.admin} />,
@@ -60,6 +66,12 @@ export default function App({ database = db }: { database?: PosDatabase }) {
   // subtree ever remounts after an error.
   const cart = useCart()
   const { clear } = cart
+
+  // Read here, next to useCart(), so the settings query is already warm by
+  // the time anyone taps PromptPay — the checkout must not wait on a read
+  // it could have started at launch. `useSettings` is safe this high up
+  // (above every ErrorBoundary) because `getSettings` never rejects.
+  const settings = useSettings(database)
 
   const [screen, setScreen] = useState<Screen>(HOME_SCREEN)
   const [retryKey, setRetryKey] = useState(0)
@@ -136,6 +148,7 @@ export default function App({ database = db }: { database?: PosDatabase }) {
               cart={cart}
               navigate={navigate}
               database={database}
+              settings={settings}
               onOrderComplete={onOrderComplete}
             />
           </ErrorBoundary>

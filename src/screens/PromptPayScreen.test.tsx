@@ -1,9 +1,8 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { StrictMode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { PROMPTPAY_ID } from '../config'
 import { PosDatabase } from '../db/db'
-import { promptPayPayload } from '../domain/promptpay'
+import { PLACEHOLDER_PROMPTPAY_ID, promptPayPayload } from '../domain/promptpay'
 import type { CartLine, Order } from '../domain/types'
 import { useCart } from '../hooks/useCart'
 import type { Screen } from '../navigation'
@@ -53,17 +52,23 @@ const hugeLine: CartLine = {
   qty: 1,
 }
 
-/** Renders PromptPayScreen with a real useCart(initial), the way App.tsx does. */
+/**
+ * Renders PromptPayScreen with a real useCart(initial), the way App.tsx
+ * does. `promptPayId` is required on the screen now (App passes
+ * `settings.promptPayId`), so the harness supplies the placeholder — what
+ * a device with no saved settings row actually reads — unless a test says
+ * otherwise.
+ */
 function Harness({
   initial,
   navigate = () => {},
   onOrderComplete = () => {},
-  promptPayId,
+  promptPayId = PLACEHOLDER_PROMPTPAY_ID,
 }: {
   initial?: CartLine[]
   navigate?: (s: Screen) => void
   onOrderComplete?: (order: Order) => void
-  promptPayId?: string
+  promptPayId?: string | null
 }) {
   const cart = useCart(initial)
   return (
@@ -85,17 +90,33 @@ describe('PromptPayScreen', () => {
   it('renders a QR whose value is exactly promptPayPayload(id, total)', () => {
     render(<Harness initial={[croissantLine]} />)
 
-    expect(qr()).toHaveAttribute('data-value', promptPayPayload(PROMPTPAY_ID, 5500))
+    expect(qr()).toHaveAttribute('data-value', promptPayPayload(PLACEHOLDER_PROMPTPAY_ID, 5500))
   })
 
-  it('shows the test-ID warning for the default (configured) ID, which is still the placeholder', () => {
+  it('shows the test-ID warning for the placeholder ID', () => {
     render(<Harness initial={[croissantLine]} />)
     expect(screen.getByText('Test PromptPay ID — not a real account')).toBeInTheDocument()
   })
 
-  it('hides the test-ID warning for a real-looking ID passed via a prop override', () => {
+  it('hides the test-ID warning for a real-looking stored ID', () => {
     render(<Harness initial={[croissantLine]} promptPayId="0812345678" />)
     expect(screen.queryByText('Test PromptPay ID — not a real account')).not.toBeInTheDocument()
+    expect(qr()).toHaveAttribute('data-value', promptPayPayload('0812345678', 5500))
+  })
+
+  it('a not-yet-loaded ID (null) shows a loading message, no QR, and a disabled Paid button', async () => {
+    render(<Harness initial={[croissantLine]} promptPayId={null} />)
+
+    expect(screen.getByText('Loading PromptPay settings…')).toBeInTheDocument()
+    // Crucially not the placeholder's QR: an unloaded ID must never be
+    // guessed at, or staff could show a QR paying the wrong account.
+    expect(qr()).not.toBeInTheDocument()
+    expect(screen.queryByText('Test PromptPay ID — not a real account')).not.toBeInTheDocument()
+    const paidButton = screen.getByRole('button', { name: 'Paid — done' })
+    expect(paidButton).toBeDisabled()
+
+    fireEvent.click(paidButton)
+    expect(await database.orders.count()).toBe(0)
   })
 
   it('Cancel calls navigate("cart") without touching the cart', () => {
@@ -185,7 +206,7 @@ describe('PromptPayScreen', () => {
     expect(onOrderComplete).not.toHaveBeenCalled()
     expect(await database.orders.count()).toBe(0)
     // The cart is untouched — the QR (and its amount) is still shown.
-    expect(qr()).toHaveAttribute('data-value', promptPayPayload(PROMPTPAY_ID, 5500))
+    expect(qr()).toHaveAttribute('data-value', promptPayPayload(PLACEHOLDER_PROMPTPAY_ID, 5500))
 
     fireEvent.click(screen.getByRole('button', { name: 'Paid — done' }))
     await waitFor(() => expect(onOrderComplete).toHaveBeenCalledTimes(1))
@@ -199,7 +220,7 @@ describe('PromptPayScreen', () => {
     )
     const onOrderComplete = vi.fn()
     render(<Harness initial={[croissantLine]} onOrderComplete={onOrderComplete} />)
-    const expectedValue = promptPayPayload(PROMPTPAY_ID, 5500)
+    const expectedValue = promptPayPayload(PLACEHOLDER_PROMPTPAY_ID, 5500)
 
     fireEvent.click(screen.getByRole('button', { name: 'Paid — done' }))
     await screen.findByRole('alert')

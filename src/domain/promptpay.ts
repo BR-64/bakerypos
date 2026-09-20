@@ -2,6 +2,19 @@ import generatePayload from 'promptpay-qr'
 import type { Satang } from './types'
 
 /**
+ * An obviously-fake PromptPay ID: well-formed (so it fails no validation
+ * and still produces a scannable QR) but no real bank account uses it.
+ *
+ * It is `DEFAULT_SETTINGS.promptPayId` (`./settings.ts`), which is what a
+ * device reads until the owner saves a real ID from Admin, and what a
+ * corrupt stored ID falls back to. `PromptPayScreen` compares the ID it
+ * was given against *this* constant — never against "whatever the settings
+ * currently hold" — to decide whether to show its "not a real account"
+ * warning, so the warning disappears exactly when a real ID is configured.
+ */
+export const PLACEHOLDER_PROMPTPAY_ID = '0000000000'
+
+/**
  * A PromptPay ID is either a 10-digit mobile number starting with `0`, or a
  * 13-digit national/tax ID. Digits only — no dashes, spaces, a leading `+`,
  * or non-ASCII (e.g. Thai) digits. This is a deliberate fail-closed choice:

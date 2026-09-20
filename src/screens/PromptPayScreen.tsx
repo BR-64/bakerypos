@@ -1,9 +1,13 @@
 import { QRCodeSVG } from 'qrcode.react'
 import './PromptPayScreen.css'
-import { PLACEHOLDER_PROMPTPAY_ID, PROMPTPAY_ID } from '../config'
 import { db, type PosDatabase } from '../db/db'
 import { formatBaht } from '../domain/money'
-import { canEncodePromptPayAmount, isValidPromptPayId, promptPayPayload } from '../domain/promptpay'
+import {
+  canEncodePromptPayAmount,
+  isValidPromptPayId,
+  PLACEHOLDER_PROMPTPAY_ID,
+  promptPayPayload,
+} from '../domain/promptpay'
 import type { Order } from '../domain/types'
 import { useCompleteOrder } from '../hooks/useCompleteOrder'
 import type { Cart } from '../hooks/useCart'
@@ -14,14 +18,24 @@ export interface PromptPayScreenProps {
   navigate: (screen: Screen) => void
   database?: PosDatabase
   onOrderComplete: (order: Order) => void
-  /** Defaults to the configured shop ID; overridable (mainly for tests). */
-  promptPayId?: string
+  /**
+   * The account the QR pays, from the settings row (App passes
+   * `settings.promptPayId`). Required, with **no module-level default**:
+   * there is no safe value to guess for the recipient of a customer's
+   * money.
+   *
+   * `null` means the settings read hasn't landed yet — the screen says so,
+   * shows no QR and keeps "Paid — done" disabled, rather than rendering a
+   * QR built from a placeholder that might not be what's actually stored.
+   */
+  promptPayId: string | null
 }
 
 /**
  * PromptPay checkout: show a QR for the cart total, generated locally from
- * `promptPayId` and `cart.total` — no network call anywhere in this path —
- * then staff tap "Paid — done" once they've seen the bank notification land.
+ * `promptPayId` (the stored settings row, passed down by App) and
+ * `cart.total` — no network call anywhere in this path — then staff tap
+ * "Paid — done" once they've seen the bank notification land.
  *
  * `useCompleteOrder` is the only way this stores the sale; on success it
  * calls `onOrderComplete` and App clears the cart, returns to Sell and shows
@@ -33,17 +47,18 @@ export function PromptPayScreen({
   navigate,
   database = db,
   onOrderComplete,
-  promptPayId = PROMPTPAY_ID,
+  promptPayId,
 }: PromptPayScreenProps) {
   const { pending, error, complete } = useCompleteOrder(cart.lines, database, onOrderComplete)
 
   const isEmpty = cart.lines.length === 0
   const isZero = cart.total <= 0
   const amountFits = canEncodePromptPayAmount(cart.total)
-  const idValid = isValidPromptPayId(promptPayId)
+  const idLoaded = promptPayId !== null
+  const idValid = idLoaded && isValidPromptPayId(promptPayId)
   const isTestId = promptPayId === PLACEHOLDER_PROMPTPAY_ID
   const showQr = !isEmpty && !isZero && amountFits && idValid
-  const payload = showQr ? promptPayPayload(promptPayId, cart.total) : null
+  const payload = showQr && promptPayId !== null ? promptPayPayload(promptPayId, cart.total) : null
 
   return (
     <main className="app screen promptpay-screen">
@@ -77,6 +92,8 @@ export function PromptPayScreen({
             <p className="promptpay-message muted">
               Amount too large for a PromptPay QR — use Cash
             </p>
+          ) : !idLoaded ? (
+            <p className="promptpay-message muted">Loading PromptPay settings…</p>
           ) : !idValid ? (
             <p className="promptpay-message muted">PromptPay isn't set up</p>
           ) : (

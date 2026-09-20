@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { PLACEHOLDER_PROMPTPAY_ID } from '../config'
+import { PLACEHOLDER_PROMPTPAY_ID } from './promptpay'
 import {
   coerceSettings,
   DEFAULT_SETTINGS,

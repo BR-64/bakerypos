@@ -1,5 +1,4 @@
-import { PLACEHOLDER_PROMPTPAY_ID } from '../config'
-import { isValidPromptPayId } from './promptpay'
+import { isValidPromptPayId, PLACEHOLDER_PROMPTPAY_ID } from './promptpay'
 
 /**
  * Primary key of the one settings row. The table is a singleton keyed by

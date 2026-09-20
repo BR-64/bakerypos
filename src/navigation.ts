@@ -1,4 +1,5 @@
 import type { PosDatabase } from './db/db'
+import type { Settings } from './domain/settings'
 import type { Order } from './domain/types'
 import type { Cart } from './hooks/useCart'
 
@@ -39,6 +40,19 @@ export interface ScreenProps {
   cart: Cart
   navigate: (screen: Screen) => void
   database: PosDatabase
+  /**
+   * Shop settings (shop name, PromptPay ID), read once in App's body via
+   * `useSettings` so the query is already warm before anyone taps
+   * PromptPay.
+   *
+   * `null` means **not loaded yet** — never "use the defaults". A screen
+   * that needs a real value renders a loading state for `null`; it must
+   * never substitute a guess, least of all a PromptPay ID, which decides
+   * who the customer's money goes to. Every case where there genuinely is
+   * no usable stored value (no row, a corrupt row, a failed read) already
+   * resolves to `DEFAULT_SETTINGS` inside `getSettings`.
+   */
+  settings: Settings | null
   /**
    * Call once `completeOrder` has resolved. App clears the cart, returns to
    * Sell and shows "Order #N — change ฿X" / "Order #N — paid". A checkout

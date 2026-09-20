@@ -3,6 +3,7 @@ import {
   canEncodePromptPayAmount,
   formatPromptPayAmount,
   isValidPromptPayId,
+  PLACEHOLDER_PROMPTPAY_ID,
   promptPayPayload,
 } from './promptpay'
 
@@ -168,5 +169,16 @@ describe('promptPayPayload', () => {
   it('throws for a bad PromptPay ID', () => {
     expect(() => promptPayPayload('123', 4550)).toThrow('Invalid PromptPay ID')
     expect(() => promptPayPayload('not-a-number', 4550)).toThrow('Invalid PromptPay ID')
+  })
+})
+
+describe('PLACEHOLDER_PROMPTPAY_ID', () => {
+  it('is well-formed, so it still builds a scannable (if useless) QR', () => {
+    expect(isValidPromptPayId(PLACEHOLDER_PROMPTPAY_ID)).toBe(true)
+    expect(() => promptPayPayload(PLACEHOLDER_PROMPTPAY_ID, 5500)).not.toThrow()
+  })
+
+  it('is obviously fake, so nobody mistakes it for a configured account', () => {
+    expect(PLACEHOLDER_PROMPTPAY_ID).toBe('0000000000')
   })
 })
