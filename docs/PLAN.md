@@ -246,15 +246,89 @@ Files already in place from the scaffold: `src/domain/{types,money}.ts` (+tests)
       `fetch` is never called. `npm test`, `npm run typecheck`, `npm run lint` and
       `npm run build` pass (run as separate commands).
 
-- [ ] **7a. Settings table + Z report.** `settings` table in Dexie (schema **version 2** — a new
-      `.version(2)` block, never an edit to version 1) with shop name and PromptPay ID, plus a
-      migration that keeps every existing product and order intact. `src/domain/report.ts` pure
-      `buildZReport(orders, day)`; `src/screens/ReportScreen.tsx` with day picker and share/copy
-      as text.
-      _Accept:_ unit tests for `buildZReport` incl. voids excluded from totals but counted; day
-      boundaries use local time; a db test opens a v1 database holding products and orders,
-      upgrades it to v2, and shows the migration keeps existing data (every product and order
-      still present and unchanged, and the new `settings` table usable).
+- [ ] **7a. Settings table + Z report.** `src/domain/settings.ts` (`SETTINGS_ID = 'shop'`,
+      `Settings { id; shopName; promptPayId }`, `DEFAULT_SETTINGS` (shopName `'Bakery'`),
+      `isValidSettings`, total `coerceSettings` that never throws and corrects *field by field* —
+      a corrupt `shopName` must not revert a valid real `promptPayId` to the placeholder, and a
+      corrupt `promptPayId` falls back to the placeholder so the test-ID warning shows).
+      `src/db/db.ts`: a brand-new `.version(2).stores({ settings: 'id' })` block with version 1
+      left byte-identical and `products`/`orders` deliberately **not** re-listed (Dexie carries
+      them forward; re-listing risks a typo dropping the `createdAt` index). No `upgrade()`
+      callback — adding a store needs no data transformation. `src/db/seed.ts` is untouched: no
+      settings row is seeded (`seedIfEmpty` short-circuits on a non-empty products table, so an
+      upgraded device would never get one anyway); `getSettings` falls back to `DEFAULT_SETTINGS`
+      when the row is missing, corrupt, or the read fails, and `saveSettings` upserts with `put`,
+      so 7b's first Admin save creates it. `getSettings` is the one db reader that swallows its
+      own errors — `useSettings` is called in `App.tsx`'s body, *above* every `ErrorBoundary`,
+      where a re-thrown rejection would take down Sell, the cart bar and the nav at once.
+      `src/config.ts` is **deleted**: `PLACEHOLDER_PROMPTPAY_ID` moves to
+      `src/domain/promptpay.ts`, `PROMPTPAY_ID` ceases to exist, `ScreenProps` gains
+      `settings: Settings | null` (`null` means *not loaded yet*, never "use defaults"), App reads
+      settings once next to `useCart()` so the query is warm before anyone taps PromptPay, and
+      `PromptPayScreen`'s `promptPayId` becomes a required `string | null` prop with no
+      module-level default — `null` renders "Loading PromptPay settings…", no QR, Paid disabled,
+      so the checkout never shows a QR built from a guessed ID. `PromptPayScreen.config.test.tsx`
+      is deleted with the module it tested and replaced by `src/App.settings.test.tsx`.
+      `src/domain/day.ts` gains `localDayKey`/`parseLocalDayKey` (local parts, never
+      `toISOString().slice(0,10)` or `new Date('YYYY-MM-DD')` — both are UTC and land on the wrong
+      day); `src/db/orders.ts` gains `ordersForDay(database, day)` holding the old `todaysOrders`
+      body and its `createdAt` blind-spot comment, with `todaysOrders` delegating so Orders and
+      its tests don't change (additive only — do not touch `completeOrder`/`voidOrder`).
+      `src/domain/report.ts` (no React, no Dexie, so task 9's server can import it): pure
+      `buildZReport(orders: unknown[], day)` → counts/totals of completed orders, per-method
+      totals (cash = expected in drawer), units and revenue per product from snapshot prices,
+      `voidedCount`/`voidedTotal` excluded from every total but reported, `invalidCount` via
+      `partitionOrders` and `mismatchedTotalCount` via `partitionCartLines`; it re-filters by
+      *parsed* instant against `localDayRange(day)` so an odd-but-parseable `createdAt` can't land
+      in the wrong day's takings, uses the **stored** `order.total` for the drawer figure, and
+      never throws; plus `formatZReport(report, shopName)` for share/copy. The task-6 blind spot
+      stands and is documented in `report.ts`: an order whose `createdAt` isn't a Z-normalised ISO
+      string is invisible to the indexed read and so appears in no day's report and no count.
+      `src/screens/ReportScreen.tsx` (+ `.css`, classes prefixed `report-`): native
+      `<input type="date">` (`max` = today) and the inner-`ErrorBoundary` + `useLiveQuery` pattern
+      from `OrdersScreen`, with the picker *outside* the boundary so a crashed body can still be
+      escaped by choosing another day, and the query keyed on the `dayKey` **string**, never a
+      `Date` (a fresh object each render re-queries forever). `src/hooks/useShareText.ts`:
+      `navigator.share` called synchronously from the tap (gesture requirement), `AbortError` =
+      silent cancel with no clipboard attempt, any other rejection falls through to
+      `navigator.clipboard.writeText`, neither → a selectable read-only textarea that must set
+      `user-select: text` (index.css disables selection globally). Off the checkout path. No new
+      dependencies, no network.
+      Files (only these): `src/domain/settings.ts`, `src/domain/settings.test.ts`,
+      `src/db/db.ts`, `src/db/db.test.ts`, `src/db/settings.ts`, `src/db/settings.test.ts`,
+      `src/hooks/useSettings.ts`, `src/hooks/useSettings.test.ts`,
+      `src/hooks/useShareText.ts`, `src/hooks/useShareText.test.ts`, `src/domain/day.ts`,
+      `src/domain/day.test.ts`, `src/db/orders.ts` (add `ordersForDay` only),
+      `src/db/orders.test.ts`, `src/domain/report.ts`, `src/domain/report.test.ts`,
+      `src/domain/promptpay.ts`, `src/domain/promptpay.test.ts`,
+      `src/screens/ReportScreen.tsx`, `src/screens/ReportScreen.test.tsx`,
+      `src/screens/ReportScreen.css`, `src/screens/PromptPayScreen.tsx`,
+      `src/screens/PromptPayScreen.test.tsx`, `src/App.settings.test.tsx`,
+      `src/navigation.ts`, deleted `src/config.ts` and
+      `src/screens/PromptPayScreen.config.test.tsx`, and in `src/App.tsx` only the `useSettings`
+      call, `settings` in the props passed to `<Entry>`, the `report:` and `promptpay:` registry
+      lines and their imports.
+      _Accept:_ unit tests for `buildZReport` incl. voids excluded from totals but counted, and
+      corrupt/`null`/BigInt records never throwing; day boundaries use local time (a hand-built
+      list either side of local midnight, and `localDayKey`/`parseLocalDayKey` round-tripping in
+      any timezone); `formatZReport` matches one exact expected string. A db test opens a **v1**
+      database — a bare `new Dexie(name)` declaring only version 1, asserted at `verno === 1`,
+      never `PosDatabase` — writes products and orders into it, closes it, reopens the same name
+      with `PosDatabase`, and shows the migration keeps existing data: `verno === 2`, every
+      product and order still present and `toEqual`-unchanged (not merely counted), the
+      `createdAt` index still working through `ordersForDay`, the running order `number`
+      continuing from the v1 orders, and the new `settings` table usable via
+      `saveSettings`/`getSettings`. Settings tests — defaults with no row, defaults for a junk
+      row, defaults when the read rejects (and App still renders Sell), a saved value surviving
+      a reopen. Screen tests on a fresh `PosDatabase` — cash, PromptPay and voided orders give
+      the right counts, `formatBaht` totals, "cash expected in drawer", per-product rows and
+      voided line; changing the date input re-queries; an empty day says so; Share copies
+      exactly `formatZReport(...)`; a cancelled share shows no error and never touches the
+      clipboard; with neither API the text appears selectable. PromptPay tests — a stored real
+      ID renders its QR with no test-ID warning, no stored row renders the placeholder QR *with*
+      the warning, and an unloaded read renders no QR at all. `fetch` is never called.
+      `npm test`, `npm run typecheck`, `npm run lint` and `npm run build` pass (run as separate
+      commands).
 
 - [ ] **7b. Admin screen + PIN lock.** Admin screen for products (add, edit name/price/category,
       toggle out of stock, archive) and settings (shop name, PromptPay ID, category order), on
