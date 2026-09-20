@@ -171,7 +171,7 @@ Files already in place from the scaffold: `src/domain/{types,money}.ts` (+tests)
       `App.promptpay.test.tsx` goes Sell → Cart → PromptPay → Paid → Sell with "Order #N — paid".
       `npm test`, `npm run typecheck` and `npm run lint` pass.
 
-- [ ] **6. Orders + void, bottom nav.** `src/domain/day.ts` (`localDayRange(now)` — local
+- [x] **6. Orders + void, bottom nav.** `src/domain/day.ts` (`localDayRange(now)` — local
       midnight to next local midnight via `setDate(+1)`, not `+86400000`, returned as ISO;
       `formatLocalTime(iso)` with a fixed `'en-GB'` locale so CI's locale can't change the
       output). `src/db/orders.ts` gains `todaysOrders(database, now?)` — additive only, do not
