@@ -480,6 +480,43 @@ body,
   color: #fff;
 }
 
+/* "Add to Home screen" hint (see InstallHint.tsx). In the normal flow at
+   the top of the shell, so it pushes the screen down rather than covering
+   anything; gone for good once dismissed, and never rendered at all in an
+   installed window. */
+.install-hint {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  /* The hint is the topmost thing on screen, so it carries the status-bar
+     inset itself — in a browser tab that inset is 0 anyway. */
+  padding: calc(12px + env(safe-area-inset-top)) 16px 12px;
+  background: var(--accent);
+  color: #fff;
+}
+
+.install-hint-text {
+  flex: 1;
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.35;
+}
+
+.install-hint-dismiss {
+  flex: 0 0 auto;
+  min-height: var(--tap);
+  min-width: var(--tap);
+  padding: 0 16px;
+  border: 2px solid #fff;
+  border-radius: 8px;
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  touch-action: manipulation;
+}
+
 /* Offline badge, inside the nav bar (see OfflineIndicator.tsx). Empty and
    zero-width while online, so the four nav buttons keep the full width and
    nothing shifts when the connection comes and goes. Not tappable — it is

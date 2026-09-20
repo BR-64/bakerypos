@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type ReactNode, type SyntheticEvent } from 'react'
 import { BottomNav } from './components/BottomNav'
 import { ErrorBoundary } from './components/ErrorBoundary'
+import { InstallHint } from './components/InstallHint'
 import { OrderToast } from './components/OrderToast'
 import { db, type PosDatabase } from './db/db'
 import { seedIfEmpty } from './db/seed'
@@ -164,6 +165,11 @@ export default function App({ database = db }: { database?: PosDatabase }) {
   return (
     <>
       <div className={showNav ? 'app-shell app-shell-with-nav' : 'app-shell'}>
+        {/* First run in a browser tab only: "Add to Home screen", until
+            it's dismissed. In the normal flow above the screen, never
+            floating over it — nothing may end up covering the cart bar,
+            a pay button or the nav. It renders nothing once installed. */}
+        <InstallHint />
         <div
           className="screen-wrap"
           onClickCapture={guardWhileShielded}
