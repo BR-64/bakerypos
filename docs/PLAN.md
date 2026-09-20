@@ -330,7 +330,7 @@ Files already in place from the scaffold: `src/domain/{types,money}.ts` (+tests)
       `npm test`, `npm run typecheck`, `npm run lint` and `npm run build` pass (run as separate
       commands).
 
-- [ ] **7b. Admin screen + PIN lock.** Admin screen for products (add, edit name/price/category,
+- [x] **7b. Admin screen + PIN lock.** Admin screen for products (add, edit name/price/category,
       toggle out of stock, archive) and settings (shop name, PromptPay ID, category order), on
       top of 7a's `settings` table. PIN lock per SPEC: `src/domain/pin.ts` (pure `hashPin(pin,
       salt)`, `verifyPin`, `generateRecoveryCode`), `pinHash`/`pinSalt`/`recoveryHash` in the
