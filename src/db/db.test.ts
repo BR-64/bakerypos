@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { DEFAULT_SETTINGS, SETTINGS_ID, type Settings } from '../domain/settings'
 import type { Order, Product } from '../domain/types'
 import { PosDatabase } from './db'
-import { completeOrder, todaysOrders } from './orders'
+import { completeOrder, ordersForDay } from './orders'
 import { getSettings, saveSettings } from './settings'
 
 /**
@@ -136,7 +136,7 @@ describe('PosDatabase schema v1 -> v2', () => {
 
     // An indexed range read — it returns nothing at all if the upgrade
     // dropped the `createdAt` index.
-    const result = await todaysOrders(database, day)
+    const result = await ordersForDay(database, day)
     expect(result.map((o) => o.id)).toEqual(['o-2', 'o-1'])
     database.close()
   })

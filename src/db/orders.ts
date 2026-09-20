@@ -72,8 +72,10 @@ export async function voidOrder(
 }
 
 /**
- * Today's orders (completed and voided alike), newest-first, for the Orders
- * screen. Additive only — does not change `completeOrder`/`voidOrder`.
+ * Every order stored on one local calendar day (completed and voided
+ * alike), newest-first. Backs both the Orders screen (via `todaysOrders`)
+ * and the Z report, which can be run for any past day. Additive only —
+ * does not change `completeOrder`/`voidOrder`.
  *
  * Reads via the indexed `createdAt` range rather than `toArray()` +
  * filtering in JS, unlike `sellableProducts`: order history only grows, so
@@ -104,11 +106,11 @@ export async function voidOrder(
  * `createdAt`, then by `number` descending as a tiebreaker for two orders
  * stored in the same millisecond.
  */
-export async function todaysOrders(
+export async function ordersForDay(
   database: PosDatabase = db,
-  now: Date = new Date(),
+  day: Date = new Date(),
 ): Promise<Order[]> {
-  const { startISO, endISO } = localDayRange(now)
+  const { startISO, endISO } = localDayRange(day)
   const orders = await database.orders
     .where('createdAt')
     .between(startISO, endISO, true, false)
@@ -117,4 +119,16 @@ export async function todaysOrders(
     if (a.createdAt !== b.createdAt) return a.createdAt < b.createdAt ? 1 : -1
     return b.number - a.number
   })
+}
+
+/**
+ * The orders on the local day containing `now` — i.e. today, for the
+ * Orders screen. A thin alias for `ordersForDay`, which holds the
+ * implementation and every caveat documented above.
+ */
+export async function todaysOrders(
+  database: PosDatabase = db,
+  now: Date = new Date(),
+): Promise<Order[]> {
+  return ordersForDay(database, now)
 }

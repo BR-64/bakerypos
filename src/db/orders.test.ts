@@ -3,7 +3,7 @@ import { addProduct } from '../domain/cart'
 import { cartTotal } from '../domain/money'
 import type { Order } from '../domain/types'
 import { PosDatabase } from './db'
-import { completeOrder, todaysOrders, voidOrder } from './orders'
+import { completeOrder, ordersForDay, todaysOrders, voidOrder } from './orders'
 import { seedProducts } from './seed'
 
 let database: PosDatabase
@@ -321,5 +321,74 @@ describe('todaysOrders', () => {
 
     const result = await todaysOrders(database)
     expect(result.map((o) => o.id)).toContain(order.id)
+  })
+})
+
+describe('ordersForDay', () => {
+  it('returns the orders of any given local day, not just today', async () => {
+    const jan14 = new Date(2026, 0, 14, 16, 0)
+    const jan15 = new Date(2026, 0, 15, 9, 0)
+    await database.orders.bulkAdd([
+      makeOrder({ id: 'o-14', number: 1, createdAt: jan14.toISOString() }),
+      makeOrder({ id: 'o-15', number: 2, createdAt: jan15.toISOString() }),
+    ])
+
+    expect((await ordersForDay(database, jan14)).map((o) => o.id)).toEqual(['o-14'])
+    expect((await ordersForDay(database, jan15)).map((o) => o.id)).toEqual(['o-15'])
+  })
+
+  it('uses the local day of the given instant, whatever the time of day', async () => {
+    const dayStart = new Date(2026, 0, 15, 0, 0, 0, 0)
+    const dayEnd = new Date(new Date(2026, 0, 16, 0, 0, 0, 0).getTime() - 1)
+    await database.orders.bulkAdd([
+      makeOrder({ id: 'o-first', number: 1, createdAt: dayStart.toISOString() }),
+      makeOrder({ id: 'o-last', number: 2, createdAt: dayEnd.toISOString() }),
+    ])
+
+    // Both instants below are the same local day, so both pick both orders.
+    expect((await ordersForDay(database, dayStart)).map((o) => o.id)).toEqual(['o-last', 'o-first'])
+    expect((await ordersForDay(database, dayEnd)).map((o) => o.id)).toEqual(['o-last', 'o-first'])
+  })
+
+  it('returns an empty list for a day with no orders, rather than throwing', async () => {
+    await database.orders.add(
+      makeOrder({ id: 'o-15', number: 1, createdAt: new Date(2026, 0, 15, 9, 0).toISOString() }),
+    )
+
+    await expect(ordersForDay(database, new Date(2026, 0, 16, 9, 0))).resolves.toEqual([])
+  })
+
+  it('sorts newest-first and breaks a createdAt tie by number, like todaysOrders', async () => {
+    const sameInstant = new Date(2026, 0, 15, 12, 0).toISOString()
+    const earlier = new Date(2026, 0, 15, 8, 0).toISOString()
+    await database.orders.bulkAdd([
+      makeOrder({ id: 'o-a', number: 1, createdAt: sameInstant }),
+      makeOrder({ id: 'o-b', number: 2, createdAt: sameInstant }),
+      makeOrder({ id: 'o-early', number: 3, createdAt: earlier }),
+    ])
+
+    const result = await ordersForDay(database, new Date(2026, 0, 15, 20, 0))
+    expect(result.map((o) => o.id)).toEqual(['o-b', 'o-a', 'o-early'])
+  })
+
+  it('defaults `day` to today', async () => {
+    const order = await completeOrder(
+      [croissant],
+      { method: 'cash', tendered: 11000, change: 0 },
+      database,
+    )
+
+    expect((await ordersForDay(database)).map((o) => o.id)).toContain(order.id)
+  })
+
+  it('is what todaysOrders delegates to: both agree for the same instant', async () => {
+    const now = new Date(2026, 0, 15, 10, 0)
+    await database.orders.bulkAdd([
+      makeOrder({ id: 'o-1', number: 1, createdAt: new Date(2026, 0, 15, 8, 0).toISOString() }),
+      makeOrder({ id: 'o-2', number: 2, createdAt: new Date(2026, 0, 15, 9, 0).toISOString() }),
+      makeOrder({ id: 'o-old', number: 3, createdAt: new Date(2026, 0, 14, 9, 0).toISOString() }),
+    ])
+
+    expect(await todaysOrders(database, now)).toEqual(await ordersForDay(database, now))
   })
 })
