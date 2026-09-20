@@ -24,6 +24,22 @@ beforeEach(async () => {
   //   too, so Dexie's own internal `setTimeout(fn, 0)` scheduling (see
   //   node_modules/dexie/dist/dexie.js) still resolves promptly instead of
   //   hanging forever waiting for a manual advance that never comes.
+  //   (A pure `vi.advanceTimersByTimeAsync(0)`-pumping approach — no real
+  //   time at all — was tried instead of `shouldAdvanceTime`, but
+  //   `todaysOrders`'s ranged cursor query over fake-indexeddb needs more
+  //   real event-loop turns than any bounded number of pumps reliably
+  //   supplies, and hung. `shouldAdvanceTime` is the practical tradeoff.)
+  //
+  // Because the fake clock is real-time-linked, real wall-clock time *does*
+  // leak into the shield's own timer between `raise()` and an assertion
+  // below — on a loaded machine that budget could, in principle, run past
+  // TAP_SHIELD_MS on its own before a test ever calls `advanceTimersByTime`.
+  // The "still blocked" checks below advance by a *small* amount (not
+  // close to TAP_SHIELD_MS) specifically to keep a wide real-time margin
+  // before the shield could expire on its own; the precise 399ms/400ms
+  // boundary, with no such drift at all, is covered by
+  // `useTapShield.test.ts`, which uses a plain (fully synthetic)
+  // `vi.useFakeTimers()`.
   // A plain vi.useFakeTimers() additionally fakes things like
   // performance.now/queueMicrotask-adjacent APIs and can hang Dexie outright.
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'], shouldAdvanceTime: true })
@@ -56,26 +72,23 @@ describe('App — tap shield', () => {
     // Back on Sell with an empty cart; the shield was just raised. The
     // screen just remounted (App keys each screen's ErrorBoundary by
     // `${screen}:${retryKey}`), so its product grid is querying again —
-    // `findByRole` waits that out; the shield's own state is unaffected by
-    // how much *real* time this takes, since only the fake clock, advanced
-    // explicitly below, controls it.
+    // `findByRole` waits that out.
     const croissantTile = await screen.findByRole('button', { name: /Croissant/ })
     fireEvent.click(croissantTile)
     expect(document.querySelector('.cart-bar-total')?.textContent).toBe('฿0')
 
-    // Still comfortably inside the shield window (a wide margin below
-    // TAP_SHIELD_MS, since `shouldAdvanceTime` also ticks the fake clock
-    // forward with real elapsed time — the razor-edge 399ms/400ms boundary
-    // is covered precisely, with no such drift, by useTapShield.test.ts).
+    // Only a small advance — see the beforeEach comment on why this stays
+    // far below TAP_SHIELD_MS rather than just under it.
     act(() => {
-      vi.advanceTimersByTime(TAP_SHIELD_MS - 100)
+      vi.advanceTimersByTime(50)
     })
     fireEvent.click(croissantTile)
     expect(document.querySelector('.cart-bar-total')?.textContent).toBe('฿0')
 
-    // Now comfortably past it.
+    // Comfortably past the full window from here, however much real time
+    // the steps above actually took.
     act(() => {
-      vi.advanceTimersByTime(200)
+      vi.advanceTimersByTime(TAP_SHIELD_MS)
     })
     fireEvent.click(croissantTile)
     expect(document.querySelector('.cart-bar-total')?.textContent).toBe('฿55')
@@ -96,6 +109,21 @@ describe('App — tap shield', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Orders' }))
     expect(screen.getByRole('heading', { name: 'Orders' })).toBeInTheDocument()
+  })
+
+  it('a tap on another screen (not Sell) is never blocked by the shield', async () => {
+    render(<App database={database} />)
+    await completeACashSale()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Orders' }))
+
+    // The shield is still up (nothing advanced its clock), but the guard
+    // only applies while Sell is showing — its whole purpose is to stop a
+    // stray tap landing on a product tile, and there is no such tile here.
+    const row = await screen.findByRole('button', { name: /^#1/ })
+    fireEvent.click(row)
+
+    expect(await screen.findByRole('heading', { name: /Order #1/ })).toBeInTheDocument()
   })
 
   it('never calls fetch on the way to a shielded sale', async () => {
