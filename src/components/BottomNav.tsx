@@ -1,4 +1,5 @@
 import { NAV_SCREENS, SCREEN_TITLES, type Screen } from '../navigation'
+import { OfflineIndicator } from './OfflineIndicator'
 
 export interface BottomNavProps {
   screen: Screen
@@ -29,6 +30,12 @@ export function BottomNav({ screen, navigate }: BottomNavProps) {
           {SCREEN_TITLES[s]}
         </button>
       ))}
+      {/* The offline badge rides in the nav rather than over the screen:
+          an overlay anywhere near the bottom would sit on the cart bar or
+          the pay buttons. It renders nothing at all while online, and the
+          nav's height is fixed either way, so nothing below it moves when
+          the signal drops. */}
+      <OfflineIndicator />
     </nav>
   )
 }

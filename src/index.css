@@ -480,6 +480,27 @@ body,
   color: #fff;
 }
 
+/* Offline badge, inside the nav bar (see OfflineIndicator.tsx). Empty and
+   zero-width while online, so the four nav buttons keep the full width and
+   nothing shifts when the connection comes and goes. Not tappable — it is
+   a status, not a control, so the 48px rule doesn't apply to it. */
+.offline-indicator {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+}
+
+.offline-indicator-badge {
+  margin-right: 12px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #cbb8a6;
+  color: var(--fg);
+  font-size: 0.75rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 /* When the bottom nav is showing (see App.tsx's .app-shell-with-nav), a
    screen's own min-height and pinned bottom bar must make room for it,
    instead of the nav covering the last ~56px of content or a pay button. */
