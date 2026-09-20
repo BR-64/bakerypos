@@ -43,7 +43,7 @@ Files already in place from the scaffold: `src/domain/{types,money}.ts` (+tests)
       non-empty `productId` and trimmed `name`, `unitPrice` a non-negative safe integer, `qty` a
       safe integer ≥ 1 — `Number.isSafeInteger`, not just `Number.isInteger`, so e.g.
       `qty: 1e300` is rejected — and `unitPrice * qty` also a safe integer) and
-      `partitionCartLines(lines)`, which also treats a *repeated* `productId` as invalid, keeping
+      `partitionCartLines(lines)`, which also treats a _repeated_ `productId` as invalid, keeping
       only the first occurrence in `valid` (lines are keyed by `productId` everywhere
       downstream — React's list key and every action's lookup — so a duplicate would collide or
       get double-mutated). `useCart(initialLines = [])` exposes only valid, de-duplicated `lines`
@@ -63,7 +63,7 @@ Files already in place from the scaffold: `src/domain/{types,money}.ts` (+tests)
       `SCREENS`, `Screen` union (sell/cart/cash/promptpay/orders/report/admin), `SCREEN_TITLES`,
       `HOME_SCREEN`, `ScreenProps { cart, navigate, database }`. `App.tsx` (optional `database`
       prop) keeps `useState<Screen>(HOME_SCREEN)` and a non-exported `screens: Record<Screen,
-      (props: ScreenProps) => ReactNode>` registry, rendered as `<Entry {...props} />` (a real
+    (props: ScreenProps) => ReactNode>` registry, rendered as `<Entry {...props} />` (a real
       component, never called as a plain function during App's render); `navigate` is `setScreen`
       directly, so it's stable across renders. Each screen sits in an `ErrorBoundary` keyed by
       screen + retry count, with a new optional "Back to Sell" (`onBack`) between "Try again" and
@@ -73,7 +73,7 @@ Files already in place from the scaffold: `src/domain/{types,money}.ts` (+tests)
       registry line plus an import, but not always — task 4 also needs an order-confirmation
       toast and task 6 a bottom nav and order-detail view, both App-level additions. Shared
       `.screen`/`.bottom-bar` CSS extracted from `.sell-screen`/`.cart-bar`. `src/screens/
-      CartScreen.tsx` (no Dexie reads): "Back to Sell"; lines with snapshot name, muted unit
+    CartScreen.tsx` (no Dexie reads): "Back to Sell"; lines with snapshot name, muted unit
       price, −/qty/+ steppers ≥ 48px labelled "Remove one X"/"Add one X", line total via
       `lineTotal`; inline clear-confirm (a labelled prompt takes "Clear cart"'s place, showing
       "Remove all N item?"/"items?" singular/plural, with "Keep" — which takes focus and sits
@@ -147,7 +147,7 @@ Files already in place from the scaffold: `src/domain/{types,money}.ts` (+tests)
       quiet zone, white background and a `title`; while the ID is still the placeholder, a
       visible "Test PromptPay ID — not a real account" warning above the QR; "Paid — done" in
       the bottom bar calls `useCompleteOrder`'s `complete({method: 'promptpay', confirmedAt:
-      now})`; everything disabled while `pending`; failure keeps the cart and shows `error` in a
+    now})`; everything disabled while `pending`; failure keeps the cart and shows `error` in a
       `role="alert"`. States: ฿0 total → "Nothing to charge — use Cash", no QR, Paid disabled;
       invalid ID → "PromptPay isn't set up", no QR; empty cart → empty state. No
       `role="status"`/`<output>` in the screen. QR is rendered locally — no network. Verify the
@@ -171,9 +171,80 @@ Files already in place from the scaffold: `src/domain/{types,money}.ts` (+tests)
       `App.promptpay.test.tsx` goes Sell → Cart → PromptPay → Paid → Sell with "Order #N — paid".
       `npm test`, `npm run typecheck` and `npm run lint` pass.
 
-- [ ] **6. Orders + void.** `src/screens/OrdersScreen.tsx` (today's orders) and detail with
-      Void (reason + confirm) via `voidOrder`. Bottom nav: Sell / Orders / Report / Admin.
-      _Accept:_ test — voided order shows a "voided" badge and stays in the list.
+- [ ] **6. Orders + void, bottom nav.** `src/domain/day.ts` (`localDayRange(now)` — local
+      midnight to next local midnight via `setDate(+1)`, not `+86400000`, returned as ISO;
+      `formatLocalTime(iso)` with a fixed `'en-GB'` locale so CI's locale can't change the
+      output). `src/db/orders.ts` gains `todaysOrders(database, now?)` — additive only, do not
+      touch `completeOrder`/`voidOrder` — reading `where('createdAt').between(startISO, endISO,
+      true, false)` (fixed-width `toISOString()` strings sort chronologically) and sorting
+      newest-first in JS by `createdAt` then `number` as a tiebreaker; document that an order
+      with a missing/non-string `createdAt` isn't in the index and so can't appear, a
+      deliberate divergence from `sellableProducts`' full `toArray()` (order history grows
+      without bound). `src/domain/order.ts` `isValidOrder`/`partitionOrders` checking header
+      fields only — `id`, `number` >= 1, `total` a non-negative safe integer (rejects `NaN`,
+      `1e18`), `createdAt` parseable, `status` exactly `'completed'`/`'voided'`, `payment`
+      well-shaped incl. cash `tendered`/`change`; lines are validated separately in the detail
+      by reusing `partitionCartLines`, since a row renders no lines and `total` is stored, not
+      recomputed. `src/domain/voidReason.ts` (`VOID_REASONS`, `MAX_VOID_REASON_LENGTH = 80`,
+      `normalizeVoidReason`). `src/screens/OrdersScreen.tsx` (+ `.css`, classes prefixed
+      `orders-`): `useLiveQuery` inside an inner `ErrorBoundary` like Sell's grid; rows (one
+      >= 48px button each) show number, time, `formatBaht(order.total)`, method and a "Voided"
+      badge; invalid orders are skipped and logged once per id via `useLogInvalidOnce` +
+      `safeString`, with a muted "N orders couldn't be displayed." footer so hidden money is
+      still counted. The detail is this screen's own `selectedId` state, not a new `Screen`
+      member — Back is `setSelectedId(null)`, the nav keeps highlighting Orders, and the one
+      live query feeds both views; an order that vanishes while open shows a message, never
+      auto-navigates. Void: "Void this order" opens an inline reason+confirm panel modelled on
+      CartScreen's clear-confirm (presets + "Other…" free text, mandatory, focused "Keep
+      order" beside a danger "Yes, void"), calling `voidOrder` through a new
+      `src/hooks/useVoidOrder.ts` — the `useCompleteOrder` in-flight-guard shape, but `pending`
+      returns to false on success since the screen stays mounted; a voided order renders the
+      badge and reason instead of the Void button, so double-voiding is impossible.
+      `src/navigation.ts` gains `NAV_SCREENS` + `showsBottomNav`; `src/components/BottomNav.tsx`
+      renders Sell / Orders / Report / Admin as >= 48px buttons with `aria-current="page"`, and
+      App renders it as a *sibling* of the ErrorBoundary (a crashed screen must still be
+      navigable) and outside the tap shield. Hidden on cart/cash/promptpay so nothing tappable
+      sits under the pay buttons. `src/index.css`: `--nav-h`/`--nav-total`, `.bottom-nav`, and
+      under `.app-shell-with-nav` both `.screen { min-height: calc(100dvh - var(--nav-total)) }`
+      and `.bottom-bar { bottom: var(--nav-total); padding-bottom: 12px }` — Sell stacks its
+      cart bar directly on the nav, and the safe-area inset moves to the nav.
+      `src/hooks/useTapShield.ts` (`TAP_SHIELD_MS = 400`): App raises it in `onOrderComplete`
+      and applies it as capture-phase `onClickCapture`/`onPointerDownCapture` on a
+      `.screen-wrap` around the boundary — not a CSS overlay, which jsdom's lack of hit-testing
+      would make untestable. The toast and the nav sit outside that wrapper and stay tappable
+      throughout. Report and Admin stay placeholders (task 7). No new dependencies, **no schema
+      change** (`createdAt`/`status` are already indexed in v1; `voidedAt`/`voidReason` are
+      unindexed fields `voidOrder` already writes), no network.
+      Files (only these): `src/domain/day.ts`, `src/domain/day.test.ts`, `src/domain/order.ts`,
+      `src/domain/order.test.ts`, `src/domain/voidReason.ts`, `src/domain/voidReason.test.ts`,
+      `src/db/orders.ts` (add `todaysOrders` only), `src/db/orders.test.ts`,
+      `src/hooks/useTapShield.ts`, `src/hooks/useTapShield.test.ts`,
+      `src/hooks/useVoidOrder.ts`, `src/hooks/useVoidOrder.test.ts`,
+      `src/components/BottomNav.tsx`, `src/components/BottomNav.test.tsx`,
+      `src/screens/OrdersScreen.tsx`, `src/screens/OrdersScreen.test.tsx`,
+      `src/screens/OrdersScreen.css`, `src/App.shield.test.tsx`, `src/App.test.tsx`,
+      `src/navigation.ts`, `src/index.css`, and in `src/App.tsx` the shell/nav/shield wiring
+      plus the `orders:` registry line and its import.
+      _Accept:_ unit tests for `day.ts` (a local `new Date(2026, 0, 2, 14, 5)` formats as
+      "14:05" in any timezone), `order.ts` (NaN/negative/`1e18` total, bad `createdAt`, unknown
+      status, missing payment, cash without `tendered` are all invalid; `null`/array/BigInt
+      never throw), `voidReason.ts`, `todaysOrders` (midnight boundaries on a fresh
+      `PosDatabase`; ties broken by `number`; a timestamp-less order neither appears nor
+      throws), `useTapShield` (false at 0, true at 399ms, false at 400ms, a re-`raise`
+      restarts rather than stacks, no timer left after unmount) and `useVoidOrder`. Testing
+      Library tests on a fresh `PosDatabase` — a voided order shows a "voided" badge and stays
+      in the list; tapping a row opens the detail with snapshot lines, the stored total and
+      cash tendered/change; "Yes, void" is disabled until a reason is picked, then writes
+      `status`/`voidReason`/`voidedAt` and the detail live-updates; a StrictMode double tap
+      voids once; a rejected void shows a `role="alert"` and leaves the order completed;
+      corrupt orders are skipped, logged once and counted in the footer; yesterday's order is
+      absent. Nav tests — present on sell/orders/report/admin, absent on cart/cash/promptpay,
+      and still usable when the current screen's boundary has crashed. Shield test
+      (`vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })`, so fake-indexeddb keeps
+      running) — right after a cash sale a tile tap leaves the cart bar at ฿0, while the toast
+      still dismisses on tap and the nav still navigates; after 400ms the same tap adds ฿55.
+      `fetch` is never called. `npm test`, `npm run typecheck`, `npm run lint` and
+      `npm run build` pass (run as separate commands).
 
 - [ ] **7. Z report + settings.** `src/domain/report.ts` pure `buildZReport(orders, day)`;
       `src/screens/ReportScreen.tsx` with day picker and share/copy as text. `settings` table in
@@ -181,6 +252,14 @@ Files already in place from the scaffold: `src/domain/{types,money}.ts` (+tests)
       settings.
       _Accept:_ unit tests for `buildZReport` incl. voids excluded from totals but counted; day
       boundaries use local time.
+      PIN lock per SPEC: `src/domain/pin.ts` (pure `hashPin(pin, salt)`, `verifyPin`,
+      `generateRecoveryCode`), `pinHash`/`pinSalt`/`recoveryHash` in the settings table,
+      `src/components/PinPrompt.tsx` (numeric keypad ≥ 48px, masked dots, lockout message),
+      first-run set-PIN flow with the recovery code shown once, unlock state held in App.tsx with
+      a 5-minute expiry. Admin and Void use it.
+      _Accept:_ tests — wrong PIN rejected and never stored in plain text; 5 wrong attempts lock
+      for 60s; unlock expires after 5 minutes; recovery code resets the PIN; Sell → Cart → Cash
+      never shows the prompt.
 
 - [ ] **8. PWA polish + device QA.** Offline indicator, install prompt hint, icon set (192/512
       PNG), Lighthouse PWA pass, manual test in airplane mode on a real phone. Write
