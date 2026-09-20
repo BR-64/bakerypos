@@ -137,18 +137,74 @@ describe('SellScreen', () => {
   it('(f) bad data: every invalid product is skipped (never rendered), logged exactly once per id even across rerenders/taps, and good products still work with an exact total', async () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const badFixtures: Product[] = [
-      { id: 'p-bad-price', name: 'Bad Price', price: 55.5, category: 'drink', sortOrder: 10, outOfStock: false, archived: false },
+      {
+        id: 'p-bad-price',
+        name: 'Bad Price',
+        price: 55.5,
+        category: 'drink',
+        sortOrder: 10,
+        outOfStock: false,
+        archived: false,
+      },
       // @ts-expect-error deliberately missing price
-      { id: 'p-missing-price', name: 'Missing Price', price: undefined, category: 'drink', sortOrder: 11, outOfStock: false, archived: false },
-      { id: 'p-empty-name', name: '', price: 2000, category: 'drink', sortOrder: 12, outOfStock: false, archived: false },
+      {
+        id: 'p-missing-price',
+        name: 'Missing Price',
+        price: undefined,
+        category: 'drink',
+        sortOrder: 11,
+        outOfStock: false,
+        archived: false,
+      },
+      {
+        id: 'p-empty-name',
+        name: '',
+        price: 2000,
+        category: 'drink',
+        sortOrder: 12,
+        outOfStock: false,
+        archived: false,
+      },
       // @ts-expect-error deliberately missing name
-      { id: 'p-undefined-name', name: undefined, price: 2000, category: 'drink', sortOrder: 13, outOfStock: false, archived: false },
+      {
+        id: 'p-undefined-name',
+        name: undefined,
+        price: 2000,
+        category: 'drink',
+        sortOrder: 13,
+        outOfStock: false,
+        archived: false,
+      },
       // @ts-expect-error deliberately bad data
-      { id: 'p-string-archived', name: 'String Archived', price: 2000, category: 'drink', sortOrder: 14, outOfStock: false, archived: 'false' },
+      {
+        id: 'p-string-archived',
+        name: 'String Archived',
+        price: 2000,
+        category: 'drink',
+        sortOrder: 14,
+        outOfStock: false,
+        archived: 'false',
+      },
       // @ts-expect-error deliberately bad data
-      { id: 'p-string-oos', name: 'String OOS', price: 2000, category: 'drink', sortOrder: 15, outOfStock: 'false', archived: false },
+      {
+        id: 'p-string-oos',
+        name: 'String OOS',
+        price: 2000,
+        category: 'drink',
+        sortOrder: 15,
+        outOfStock: 'false',
+        archived: false,
+      },
       // @ts-expect-error deliberately missing sortOrder
-      { id: 'p-undef-sort', name: 'Undef Sort', price: 2000, category: 'drink', sortOrder: undefined, outOfStock: false, archived: false },
+      {
+        id: 'p-undef-sort',
+        name: 'Undef Sort',
+        price: 2000,
+        category: 'drink',
+        sortOrder: undefined,
+        outOfStock: false,
+        archived: false,
+      },
     ]
     await database.products.bulkAdd([...fixtures, ...badFixtures])
 
@@ -179,11 +235,17 @@ describe('SellScreen', () => {
       'p-undef-sort',
     ]
     const countLogsFor = (id: string) =>
-      errorSpy.mock.calls.filter((args) => typeof args[0] === 'string' && args[0].includes(id)).length
+      errorSpy.mock.calls.filter((args) => typeof args[0] === 'string' && args[0].includes(id))
+        .length
 
-    for (const id of badIds) {
-      expect(countLogsFor(id)).toBe(1)
-    }
+    // The tile resolving only means the grid committed; `useLogInvalidOnce`
+    // logs from an effect, which React may flush in a later task. Wait for it
+    // rather than asserting immediately, or this races (~2-3% of runs).
+    await waitFor(() => {
+      for (const id of badIds) {
+        expect(countLogsFor(id)).toBe(1)
+      }
+    })
 
     // Good products still add, and the total stays exact through a rerender
     // (tab switch) and a few taps — and logging does not repeat.

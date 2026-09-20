@@ -96,7 +96,7 @@ Files already in place from the scaffold: `src/domain/{types,money}.ts` (+tests)
       a forced error in the Cart screen shows Try again/Back to Sell/Reload, with the cart intact
       after either recovery path and no Back to Sell on Sell's own boundary.
 
-- [ ] **4. Cash checkout.** Builds on the shared checkout commit already on master — do not edit
+- [x] **4. Cash checkout.** Builds on the shared checkout commit already on master — do not edit
       any of it: `ScreenProps.onOrderComplete` (App clears the cart, returns to Sell and shows
       "Order #N — change ฿X" via `OrderToast`), `useCompleteOrder` (the only way to store a sale:
       synchronous double-tap guard, `pending`/`error`, calls `onOrderComplete` exactly once),
@@ -133,7 +133,7 @@ Files already in place from the scaffold: `src/domain/{types,money}.ts` (+tests)
       called; `App.cash.test.tsx` goes Sell → Cart → Cash → Exact → Sell with the toast and an
       empty cart. `npm test`, `npm run typecheck` and `npm run lint` pass.
 
-- [ ] **5. PromptPay checkout.** Builds on the same shared commit (do not edit any of it).
+- [x] **5. PromptPay checkout.** Builds on the same shared commit (do not edit any of it).
       `src/config.ts` `PROMPTPAY_ID` (digits only; the placeholder is the obviously fake
       `'0000000000'`; task 7 moves it to settings). `src/domain/promptpay.ts`:
       `isValidPromptPayId` (10-digit phone starting with 0, or 13 digits), `formatPromptPayAmount`
