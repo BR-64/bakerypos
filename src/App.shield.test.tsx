@@ -111,19 +111,28 @@ describe('App — tap shield', () => {
     expect(screen.getByRole('heading', { name: 'Orders' })).toBeInTheDocument()
   })
 
-  it('a tap on another screen (not Sell) is never blocked by the shield', async () => {
+  it('a tap on another screen (not Sell) is never blocked by the shield, which is proven still up back on Sell afterwards', async () => {
     render(<App database={database} />)
     await completeACashSale()
 
     fireEvent.click(screen.getByRole('button', { name: 'Orders' }))
 
-    // The shield is still up (nothing advanced its clock), but the guard
-    // only applies while Sell is showing — its whole purpose is to stop a
-    // stray tap landing on a product tile, and there is no such tile here.
+    // The guard only applies while Sell is showing — its whole purpose is
+    // to stop a stray tap landing on a product tile, and there is no such
+    // tile here — so this tap on another screen must never be eaten.
     const row = await screen.findByRole('button', { name: /^#1/ })
     fireEvent.click(row)
-
     expect(await screen.findByRole('heading', { name: /Order #1/ })).toBeInTheDocument()
+
+    // Nothing here advanced the shield's clock, so it must still be up —
+    // prove that directly, rather than just trusting real time didn't
+    // quietly outrun TAP_SHIELD_MS during the steps above (which would
+    // make the assertions above pass vacuously, against an unscoped guard
+    // too): back on Sell, the very next tile tap is still blocked.
+    fireEvent.click(screen.getByRole('button', { name: 'Sell' }))
+    const croissantTile = await screen.findByRole('button', { name: /Croissant/ })
+    fireEvent.click(croissantTile)
+    expect(document.querySelector('.cart-bar-total')?.textContent).toBe('฿0')
   })
 
   it('never calls fetch on the way to a shielded sale', async () => {
