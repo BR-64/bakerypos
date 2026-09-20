@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_SETTINGS, SETTINGS_ID, type Settings } from '../domain/settings'
 import { PosDatabase } from './db'
-import { getSettings, saveSettings } from './settings'
+import { getSettings, readSettings, saveSettings, updateSettings } from './settings'
 
 let database: PosDatabase
 let name: string
@@ -16,7 +16,16 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-const real: Settings = { id: SETTINGS_ID, shopName: 'Sunrise Bakery', promptPayId: '0812345678' }
+const real: Settings = {
+  ...DEFAULT_SETTINGS,
+  shopName: 'Sunrise Bakery',
+  promptPayId: '0812345678',
+}
+
+/** Stand-ins for the hash/salt shapes `src/domain/pin.ts` accepts. */
+const pinHash = 'a'.repeat(64)
+const recoveryHash = 'b'.repeat(64)
+const pinSalt = 'c'.repeat(32)
 
 describe('getSettings', () => {
   it('returns the defaults when there is no row', async () => {
@@ -38,7 +47,7 @@ describe('getSettings', () => {
     } as unknown as Settings)
 
     await expect(getSettings(database)).resolves.toEqual({
-      id: SETTINGS_ID,
+      ...DEFAULT_SETTINGS,
       shopName: DEFAULT_SETTINGS.shopName,
       promptPayId: '0812345678',
     })
@@ -105,5 +114,105 @@ describe('saveSettings', () => {
     await reopened.open()
     await expect(getSettings(reopened)).resolves.toEqual(real)
     reopened.close()
+  })
+
+  it('stores the PIN fields, so the lock survives a reopen', async () => {
+    await saveSettings({ ...real, pinHash, pinSalt, recoveryHash }, database)
+    database.close()
+
+    const reopened = new PosDatabase(name)
+    await reopened.open()
+    await expect(getSettings(reopened)).resolves.toEqual({
+      ...real,
+      pinHash,
+      pinSalt,
+      recoveryHash,
+    })
+    reopened.close()
+  })
+})
+
+describe('readSettings', () => {
+  it('reports failed: false for a missing row — "no row yet" is not a failure', async () => {
+    await expect(readSettings(database)).resolves.toEqual({
+      settings: DEFAULT_SETTINGS,
+      failed: false,
+    })
+  })
+
+  it('reports failed: true when the read rejects, with usable defaults alongside', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.spyOn(database.settings, 'get').mockRejectedValue(new Error('IndexedDB is gone'))
+
+    // PromptPay shows "isn't set up — use Cash" for this, never a QR for
+    // the placeholder account; Admin refuses to overwrite what it can't read.
+    await expect(readSettings(database)).resolves.toEqual({
+      settings: DEFAULT_SETTINGS,
+      failed: true,
+    })
+  })
+
+  it('never hands out the shared DEFAULT_SETTINGS arrays', async () => {
+    const { settings } = await readSettings(database)
+
+    expect(settings).not.toBe(DEFAULT_SETTINGS)
+    expect(settings.categoryOrder).not.toBe(DEFAULT_SETTINGS.categoryOrder)
+  })
+})
+
+describe('updateSettings', () => {
+  it('changes one field and leaves the rest of the row alone', async () => {
+    await saveSettings({ ...real, pinHash, pinSalt, recoveryHash }, database)
+
+    const stored = await updateSettings({ shopName: 'Sunrise Bakery II' }, database)
+
+    // The PIN above all: a "save the shop name" that blanked the hash would
+    // unlock Admin for anyone holding the phone.
+    expect(stored).toEqual({
+      ...real,
+      shopName: 'Sunrise Bakery II',
+      pinHash,
+      pinSalt,
+      recoveryHash,
+    })
+    expect(await database.settings.count()).toBe(1)
+  })
+
+  it('creates the row on the first save when none exists yet', async () => {
+    const stored = await updateSettings({ promptPayId: '0812345678' }, database)
+
+    expect(stored).toEqual({ ...DEFAULT_SETTINGS, promptPayId: '0812345678' })
+  })
+
+  it('stores a PIN without disturbing the shop fields', async () => {
+    await saveSettings(real, database)
+
+    await updateSettings({ pinHash, pinSalt, recoveryHash }, database)
+
+    await expect(getSettings(database)).resolves.toEqual({
+      ...real,
+      pinHash,
+      pinSalt,
+      recoveryHash,
+    })
+  })
+
+  it('refuses to write when the current row could not be read', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const put = vi.spyOn(database.settings, 'put')
+    vi.spyOn(database.settings, 'get').mockRejectedValue(new Error('IndexedDB is gone'))
+
+    // Merging into defaults and writing that would replace a real shop's
+    // settings — PIN included — on the strength of a failed read.
+    await expect(updateSettings({ shopName: 'Nope' }, database)).rejects.toThrow(
+      'nothing was changed',
+    )
+    expect(put).not.toHaveBeenCalled()
+  })
+
+  it('rejects a failed write so Admin can show it', async () => {
+    vi.spyOn(database.settings, 'put').mockRejectedValue(new Error('disk full'))
+
+    await expect(updateSettings({ shopName: 'Nope' }, database)).rejects.toThrow('disk full')
   })
 })

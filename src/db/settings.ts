@@ -1,6 +1,53 @@
 import { safeString } from '../domain/log'
-import { coerceSettings, DEFAULT_SETTINGS, SETTINGS_ID, type Settings } from '../domain/settings'
+import { coerceSettings, SETTINGS_ID, type Settings } from '../domain/settings'
 import { db, type PosDatabase } from './db'
+
+/** What `readSettings` resolves with: usable settings, plus whether they're real. */
+export interface SettingsRead {
+  /** Always usable, whatever happened — see `getSettings`. */
+  settings: Settings
+  /**
+   * True when the read itself **failed**, so `settings` holds defaults that
+   * were never stored anywhere.
+   *
+   * Callers that only display a value can ignore this. Two callers must
+   * not: the PromptPay screen (which would otherwise show a QR for the
+   * placeholder account as though it were the shop's — task 7b changed it
+   * to say "PromptPay isn't set up — use Cash" instead) and Admin (whose
+   * Save would overwrite a real stored row, PIN included, with defaults).
+   * `updateSettings` refuses to write at all in this state.
+   *
+   * It is deliberately *not* the same as "no row yet": that case is normal
+   * until the first Admin save, and the placeholder QR plus its test-ID
+   * warning is the right thing to show for it.
+   */
+  failed: boolean
+}
+
+/**
+ * Read the settings row, saying whether the read worked.
+ *
+ * `getSettings` is this with the flag dropped; everything that reasons
+ * about *trusting* the values (Admin, the PromptPay QR's recipient, the
+ * PIN lock) uses this instead.
+ */
+export async function readSettings(database: PosDatabase = db): Promise<SettingsRead> {
+  try {
+    const row = await database.settings.get(SETTINGS_ID)
+    // `coerceSettings` handles the missing row (`undefined`) too, and
+    // always builds a fresh object — never the shared `DEFAULT_SETTINGS`,
+    // whose `categoryOrder` array Admin's reorder buttons would otherwise
+    // mutate for every later fallback on the page.
+    return { settings: coerceSettings(row), failed: false }
+  } catch (error) {
+    // `safeString` (not `String(error)`) for the non-Error case: whatever
+    // a rejected IndexedDB read hands back is untrusted, and building this
+    // message must not be what finally throws.
+    const message = error instanceof Error ? error.message : safeString(error)
+    console.error(`getSettings: using defaults, the settings read failed — ${message}`)
+    return { settings: coerceSettings(undefined), failed: true }
+  }
+}
 
 /**
  * Read the shop settings, always resolving to something usable.
@@ -19,22 +66,7 @@ import { db, type PosDatabase } from './db'
  * field), or a failed read (logged, then defaults).
  */
 export async function getSettings(database: PosDatabase = db): Promise<Settings> {
-  try {
-    const row = await database.settings.get(SETTINGS_ID)
-    // A fresh copy, never the shared `DEFAULT_SETTINGS` object: task 7b's
-    // Admin form holds whatever this returns as its edit target, and
-    // mutating the module-level default would poison every later
-    // fallback for the lifetime of the page.
-    if (row === undefined) return { ...DEFAULT_SETTINGS }
-    return coerceSettings(row)
-  } catch (error) {
-    // `safeString` (not `String(error)`) for the non-Error case: whatever
-    // a rejected IndexedDB read hands back is untrusted, and building this
-    // message must not be what finally throws.
-    const message = error instanceof Error ? error.message : safeString(error)
-    console.error(`getSettings: using defaults, the settings read failed — ${message}`)
-    return { ...DEFAULT_SETTINGS }
-  }
+  return (await readSettings(database)).settings
 }
 
 /**
@@ -55,4 +87,29 @@ export async function saveSettings(
   const stored = coerceSettings(settings)
   await database.settings.put(stored)
   return stored
+}
+
+/**
+ * Change some settings fields, leaving the rest as stored.
+ *
+ * The row is a singleton written with one `put`, so Admin's "save the shop
+ * name" must not be allowed to blank the PromptPay ID — or, far worse, the
+ * PIN hash — just because the form only knew about one field. Every writer
+ * in the app (the Admin forms, the set-PIN and recovery flows) goes through
+ * here rather than calling `saveSettings` with a hand-built row.
+ *
+ * Refuses to write at all when the current row couldn't be read: merging a
+ * patch into `DEFAULT_SETTINGS` and storing that would silently replace a
+ * real shop's settings, and un-set their PIN, on the strength of a failed
+ * read. The caller shows the rejection and keeps the form usable.
+ */
+export async function updateSettings(
+  patch: Partial<Omit<Settings, 'id'>>,
+  database: PosDatabase = db,
+): Promise<Settings> {
+  const current = await readSettings(database)
+  if (current.failed) {
+    throw new Error("Couldn't read the current settings, so nothing was changed.")
+  }
+  return saveSettings({ ...current.settings, ...patch }, database)
 }

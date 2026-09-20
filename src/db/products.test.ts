@@ -1,7 +1,15 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { Product } from '../domain/types'
 import { PosDatabase } from './db'
-import { sellableProducts } from './products'
+import { completeOrder } from './orders'
+import {
+  allProducts,
+  archiveProduct,
+  createProduct,
+  sellableProducts,
+  setProductOutOfStock,
+  updateProduct,
+} from './products'
 
 let database: PosDatabase
 
@@ -101,5 +109,181 @@ describe('sellableProducts', () => {
     const result = await sellableProducts(database)
 
     expect(result.some((p) => p.id === 'p-string-archived')).toBe(true)
+  })
+})
+
+describe('allProducts', () => {
+  it('includes archived products, still sorted by sortOrder', async () => {
+    await database.products.bulkAdd(fixtures)
+
+    const result = await allProducts(database)
+
+    expect(result.map((p) => p.id)).toEqual([
+      'p-croissant',
+      'p-old-cake',
+      'p-cookie',
+      'p-sourdough',
+    ])
+  })
+
+  it('returns an empty array for an empty table', async () => {
+    expect(await allProducts(database)).toEqual([])
+  })
+})
+
+describe('createProduct', () => {
+  it('adds a sellable product at the end of the grid', async () => {
+    await database.products.bulkAdd(fixtures)
+
+    const created = await createProduct(
+      { name: '  Almond Croissant  ', price: 6500, category: 'pastry' },
+      database,
+    )
+
+    expect(created).toMatchObject({
+      name: 'Almond Croissant',
+      price: 6500,
+      category: 'pastry',
+      sortOrder: 5,
+      outOfStock: false,
+      archived: false,
+    })
+    expect(created.id).toMatch(/[0-9a-f-]{36}/)
+    expect((await sellableProducts(database)).at(-1)?.id).toBe(created.id)
+  })
+
+  it('gives each product its own sortOrder, even with a corrupt one in the table', async () => {
+    await database.products.add({
+      id: 'p-bad',
+      name: 'Bad',
+      price: 100,
+      category: 'other',
+      outOfStock: false,
+      archived: false,
+    } as unknown as Product)
+
+    const first = await createProduct({ name: 'A', price: 100, category: 'bread' }, database)
+    const second = await createProduct({ name: 'B', price: 100, category: 'bread' }, database)
+
+    expect(second.sortOrder).toBeGreaterThan(first.sortOrder)
+  })
+
+  it('rejects values that could never be a valid product, writing nothing', async () => {
+    await expect(
+      createProduct({ name: '  ', price: 100, category: 'bread' }, database),
+    ).rejects.toThrow()
+    await expect(
+      createProduct({ name: 'A', price: 10.5, category: 'bread' }, database),
+    ).rejects.toThrow()
+    await expect(
+      createProduct({ name: 'A', price: -1, category: 'bread' }, database),
+    ).rejects.toThrow()
+    await expect(
+      createProduct({ name: 'A', price: 1e18, category: 'bread' }, database),
+    ).rejects.toThrow()
+    await expect(
+      // @ts-expect-error deliberately bad category
+      createProduct({ name: 'A', price: 100, category: 'sandwiches' }, database),
+    ).rejects.toThrow()
+    expect(await database.products.count()).toBe(0)
+  })
+})
+
+describe('updateProduct', () => {
+  it('changes name, price and category, keeping sortOrder and stock state', async () => {
+    await database.products.bulkAdd(fixtures)
+
+    await updateProduct(
+      'p-sourdough',
+      { name: 'Rye Loaf', price: 13000, category: 'bread' },
+      database,
+    )
+
+    expect(await database.products.get('p-sourdough')).toEqual({
+      id: 'p-sourdough',
+      name: 'Rye Loaf',
+      price: 13000,
+      category: 'bread',
+      sortOrder: 4,
+      outOfStock: true,
+      archived: false,
+    })
+  })
+
+  it('never rewrites history: an order placed before the edit keeps its snapshot price', async () => {
+    await database.products.bulkAdd(fixtures)
+    const order = await completeOrder(
+      [{ productId: 'p-croissant', name: 'Croissant', unitPrice: 5500, qty: 2 }],
+      { method: 'cash', tendered: 20000, change: 9000 },
+      database,
+    )
+
+    await updateProduct(
+      'p-croissant',
+      { name: 'Butter Croissant', price: 9900, category: 'pastry' },
+      database,
+    )
+
+    expect(await database.orders.get(order.id)).toEqual(order)
+    expect((await database.orders.get(order.id))?.lines[0]).toEqual({
+      productId: 'p-croissant',
+      name: 'Croissant',
+      unitPrice: 5500,
+      qty: 2,
+    })
+    expect((await database.orders.get(order.id))?.total).toBe(11000)
+  })
+
+  it('rejects an unknown id and bad values', async () => {
+    await database.products.bulkAdd(fixtures)
+
+    await expect(
+      updateProduct('p-nope', { name: 'X', price: 100, category: 'bread' }, database),
+    ).rejects.toThrow('no longer exists')
+    await expect(
+      updateProduct('p-cookie', { name: 'X', price: 1.5, category: 'bread' }, database),
+    ).rejects.toThrow()
+    expect((await database.products.get('p-cookie'))?.price).toBe(4000)
+  })
+})
+
+describe('setProductOutOfStock', () => {
+  it('toggles the flag without touching anything else', async () => {
+    await database.products.bulkAdd(fixtures)
+
+    await setProductOutOfStock('p-cookie', true, database)
+    expect((await database.products.get('p-cookie'))?.outOfStock).toBe(true)
+
+    await setProductOutOfStock('p-cookie', false, database)
+    expect(await database.products.get('p-cookie')).toEqual(fixtures[0])
+  })
+
+  it('rejects an unknown id', async () => {
+    await expect(setProductOutOfStock('p-nope', true, database)).rejects.toThrow('no longer exists')
+  })
+})
+
+describe('archiveProduct', () => {
+  it('archives rather than deleting: the row stays for old orders', async () => {
+    await database.products.bulkAdd(fixtures)
+
+    await archiveProduct('p-cookie', true, database)
+
+    expect(await database.products.count()).toBe(fixtures.length)
+    expect((await database.products.get('p-cookie'))?.archived).toBe(true)
+    expect((await sellableProducts(database)).some((p) => p.id === 'p-cookie')).toBe(false)
+    expect((await allProducts(database)).some((p) => p.id === 'p-cookie')).toBe(true)
+  })
+
+  it('can put an archived product back on the menu', async () => {
+    await database.products.bulkAdd(fixtures)
+
+    await archiveProduct('p-old-cake', false, database)
+
+    expect((await sellableProducts(database)).some((p) => p.id === 'p-old-cake')).toBe(true)
+  })
+
+  it('rejects an unknown id', async () => {
+    await expect(archiveProduct('p-nope', true, database)).rejects.toThrow('no longer exists')
   })
 })
