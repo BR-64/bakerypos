@@ -27,22 +27,39 @@ export function categoryLabel(category: Category): string {
 }
 
 /** Whether `category` is one of the known, orderable categories. */
-function isKnownCategory(category: unknown): category is Category {
+export function isKnownCategory(category: unknown): category is Category {
   return typeof category === 'string' && (CATEGORY_ORDER as string[]).includes(category)
 }
 
 /**
  * Which category tabs to show: only categories with at least one product,
- * in `CATEGORY_ORDER` order. A category whose only product is out of stock
- * still counts — out-of-stock products stay visible (disabled) in the grid.
+ * in `order` (the shop's `settings.categoryOrder`, editable from Admin;
+ * `CATEGORY_ORDER` when nothing is stored yet). A category whose only
+ * product is out of stock still counts — out-of-stock products stay
+ * visible (disabled) in the grid.
  *
  * Bad-data safe: products with an unknown or missing category are ignored
  * here (they still show under the "All" tab via `productsInCategory`), so a
- * corrupt category value never throws and never invents a stray tab.
+ * corrupt category value never throws and never invents a stray tab. A
+ * stored `order` missing a category can't hide it either — `coerceSettings`
+ * repairs the stored order into a full permutation — but as a last resort
+ * any category `order` leaves out is appended here in `CATEGORY_ORDER`
+ * position rather than dropped.
  */
-export function visibleCategories(products: Product[]): Category[] {
+export function visibleCategories(
+  products: Product[],
+  order: Category[] = CATEGORY_ORDER,
+): Category[] {
   const present = new Set(products.filter((p) => isKnownCategory(p.category)).map((p) => p.category))
-  return CATEGORY_ORDER.filter((c) => present.has(c))
+  const seen = new Set<Category>()
+  const tabs: Category[] = []
+  for (const category of [...order, ...CATEGORY_ORDER]) {
+    if (isKnownCategory(category) && present.has(category) && !seen.has(category)) {
+      seen.add(category)
+      tabs.push(category)
+    }
+  }
+  return tabs
 }
 
 /** A tab id: one of the known categories, or 'all' for every product. */

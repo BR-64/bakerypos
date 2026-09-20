@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { CATEGORY_ORDER } from './categories'
 import { PLACEHOLDER_PROMPTPAY_ID } from './promptpay'
 import {
   coerceSettings,
@@ -10,7 +11,22 @@ import {
 
 const realId = '0812345678'
 
-const good: Settings = { id: SETTINGS_ID, shopName: 'Sunrise Bakery', promptPayId: realId }
+/** A stand-in for a real stored hash/salt — the shapes `pin.ts` accepts. */
+const hash = 'a'.repeat(64)
+const otherHash = 'b'.repeat(64)
+const salt = 'c'.repeat(32)
+
+const good: Settings = {
+  id: SETTINGS_ID,
+  shopName: 'Sunrise Bakery',
+  promptPayId: realId,
+  categoryOrder: [...CATEGORY_ORDER],
+  pinHash: null,
+  pinSalt: null,
+  recoveryHash: null,
+}
+
+const withPin: Settings = { ...good, pinHash: hash, pinSalt: salt, recoveryHash: otherHash }
 
 describe('DEFAULT_SETTINGS', () => {
   it('is itself valid, and uses the placeholder PromptPay ID so the test-ID warning shows', () => {
@@ -49,6 +65,19 @@ describe('isValidSettings', () => {
   it('accepts a 13-digit national ID', () => {
     expect(isValidSettings({ ...good, promptPayId: '1234567890123' })).toBe(true)
   })
+
+  it('accepts a row with a stored PIN, and rejects half-stored PIN fields', () => {
+    expect(isValidSettings(withPin)).toBe(true)
+    expect(isValidSettings({ ...withPin, pinSalt: null })).toBe(false)
+    expect(isValidSettings({ ...withPin, pinHash: 'not-a-hash' })).toBe(false)
+    expect(isValidSettings({ ...good, recoveryHash: hash })).toBe(false)
+  })
+
+  it('rejects a category order that is not a full permutation', () => {
+    expect(isValidSettings({ ...good, categoryOrder: ['cake'] })).toBe(false)
+    expect(isValidSettings({ ...good, categoryOrder: undefined })).toBe(false)
+    expect(isValidSettings({ ...good, categoryOrder: [...CATEGORY_ORDER, 'cake'] })).toBe(false)
+  })
 })
 
 describe('coerceSettings', () => {
@@ -77,7 +106,7 @@ describe('coerceSettings', () => {
 
   it('corrects a corrupt shopName without reverting a valid real promptPayId', () => {
     expect(coerceSettings({ id: SETTINGS_ID, shopName: '  ', promptPayId: realId })).toEqual({
-      id: SETTINGS_ID,
+      ...good,
       shopName: DEFAULT_SETTINGS.shopName,
       promptPayId: realId,
     })
@@ -87,10 +116,71 @@ describe('coerceSettings', () => {
     expect(
       coerceSettings({ id: SETTINGS_ID, shopName: 'Sunrise Bakery', promptPayId: 'nope' }),
     ).toEqual({
-      id: SETTINGS_ID,
+      ...good,
       shopName: 'Sunrise Bakery',
       promptPayId: PLACEHOLDER_PROMPTPAY_ID,
     })
+  })
+
+  it('keeps a stored PIN through a corrupt shopName (the lock is not a display field)', () => {
+    expect(coerceSettings({ ...withPin, shopName: 42 })).toEqual({
+      ...withPin,
+      shopName: DEFAULT_SETTINGS.shopName,
+    })
+  })
+
+  it('carries the PIN fields across a save — the coerceSettings contract from 7a', () => {
+    // `saveSettings` writes `coerceSettings(input)`, so a field this
+    // function forgets is silently dropped on every save. These three are
+    // the whole lock: dropping them would unlock Admin for good.
+    const stored = coerceSettings(withPin)
+
+    expect(stored.pinHash).toBe(hash)
+    expect(stored.pinSalt).toBe(salt)
+    expect(stored.recoveryHash).toBe(otherHash)
+    expect(coerceSettings({ ...good, categoryOrder: ['drink', 'cake'] }).categoryOrder).toEqual([
+      'drink',
+      'cake',
+      'bread',
+      'pastry',
+      'other',
+    ])
+  })
+
+  it('drops a hash without its salt, both ways, back to no-PIN-set', () => {
+    // A hash with no salt can never match anything: keeping it would leave
+    // Admin locked forever with no way back in.
+    expect(coerceSettings({ ...withPin, pinSalt: 'not hex' })).toMatchObject({
+      pinHash: null,
+      pinSalt: null,
+      recoveryHash: null,
+    })
+    expect(coerceSettings({ ...withPin, pinHash: undefined })).toMatchObject({
+      pinHash: null,
+      pinSalt: null,
+      recoveryHash: null,
+    })
+  })
+
+  it('keeps the PIN when only the recovery hash is corrupt', () => {
+    expect(coerceSettings({ ...withPin, recoveryHash: 'nope' })).toEqual({
+      ...withPin,
+      recoveryHash: null,
+    })
+  })
+
+  it('repairs a category order that is missing, junk, duplicated or unknown', () => {
+    expect(coerceSettings({ ...good, categoryOrder: 'cake' }).categoryOrder).toEqual([
+      ...CATEGORY_ORDER,
+    ])
+    expect(
+      coerceSettings({ ...good, categoryOrder: ['cake', 'cake', 'nope', null] }).categoryOrder,
+    ).toEqual(['cake', 'bread', 'pastry', 'drink', 'other'])
+  })
+
+  it('never hands back the shared CATEGORY_ORDER array, so Admin can reorder safely', () => {
+    expect(coerceSettings({}).categoryOrder).not.toBe(CATEGORY_ORDER)
+    expect(coerceSettings({}).categoryOrder).not.toBe(DEFAULT_SETTINGS.categoryOrder)
   })
 
   it('always writes the singleton id, whatever the input said', () => {
@@ -98,7 +188,7 @@ describe('coerceSettings', () => {
   })
 
   it('drops unknown extra fields (the documented contract for adding fields)', () => {
-    expect(coerceSettings({ ...good, pinHash: 'abc' })).toEqual(good)
+    expect(coerceSettings({ ...good, leftoverFromSomeOldVersion: 'abc' })).toEqual(good)
   })
 
   it('always returns something isValidSettings accepts', () => {

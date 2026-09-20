@@ -62,6 +62,31 @@ describe('visibleCategories', () => {
     expect(visibleCategories([])).toEqual([])
   })
 
+  it("follows the shop's stored order when one is given (Admin's category order)", () => {
+    const products = CATEGORY_ORDER.map((category, i) => product({ id: `p${i}`, category }))
+
+    expect(visibleCategories(products, ['drink', 'cake', 'bread', 'pastry', 'other'])).toEqual([
+      'drink',
+      'cake',
+      'bread',
+      'pastry',
+      'other',
+    ])
+  })
+
+  it('appends, never hides, a category the stored order left out or repeated', () => {
+    const products = CATEGORY_ORDER.map((category, i) => product({ id: `p${i}`, category }))
+
+    // @ts-expect-error a stored order is untrusted data
+    expect(visibleCategories(products, ['drink', 'drink', 'nonsense'])).toEqual([
+      'drink',
+      'bread',
+      'pastry',
+      'cake',
+      'other',
+    ])
+  })
+
   it('ignores a product with an unknown or missing category instead of throwing', () => {
     const products = [
       product({ id: 'p1', category: 'bread' }),
