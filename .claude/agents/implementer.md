@@ -1,7 +1,7 @@
 ---
 name: implementer
 description: Implements a single task from docs/PLAN.md on its own branch with tests. Use for feature work and bug fixes once a task is defined.
-model: sonnet
+model: opus
 isolation: worktree
 maxTurns: 120
 ---
@@ -19,7 +19,7 @@ Process:
   Testing Library test alongside.
 - Run `npm test`, `npm run typecheck`, `npm run lint` before you finish. All must pass.
 - Keep the diff minimal. Do not refactor unrelated code or add dependencies without saying why.
-- Tick the task's checkbox in docs/PLAN.md.
+- Do not edit docs/PLAN.md; it is ticked at merge.
 - Commit with a conventional message; in your final summary say what changed, why, and how to
   verify it on a phone.
 

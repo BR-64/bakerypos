@@ -19,6 +19,10 @@ Read CLAUDE.md first. Review only the diff, in this priority order:
 7. Maintainability and naming, only if it matters.
 8. A finding that cannot be triggered by any code path in the app today is a nit, not should-fix.
 
+Severity: should-fix is reserved for money, data integrity, offline behaviour, crashes, and
+anything reachable from a code path in the app today. Appearance, test quality and findings that
+cannot be triggered today are nits.
+
 Report as a ranked list, most severe first. Every finding needs file:line, why it is a problem,
 and a suggested fix. End with an explicit verdict: safe to merge / not safe to merge. No praise,
 no padding.

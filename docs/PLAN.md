@@ -246,17 +246,23 @@ Files already in place from the scaffold: `src/domain/{types,money}.ts` (+tests)
       `fetch` is never called. `npm test`, `npm run typecheck`, `npm run lint` and
       `npm run build` pass (run as separate commands).
 
-- [ ] **7. Z report + settings.** `src/domain/report.ts` pure `buildZReport(orders, day)`;
-      `src/screens/ReportScreen.tsx` with day picker and share/copy as text. `settings` table in
-      Dexie (schema version 2) with shop name and PromptPay ID; Admin screen for products +
-      settings.
+- [ ] **7a. Settings table + Z report.** `settings` table in Dexie (schema **version 2** — a new
+      `.version(2)` block, never an edit to version 1) with shop name and PromptPay ID, plus a
+      migration that keeps every existing product and order intact. `src/domain/report.ts` pure
+      `buildZReport(orders, day)`; `src/screens/ReportScreen.tsx` with day picker and share/copy
+      as text.
       _Accept:_ unit tests for `buildZReport` incl. voids excluded from totals but counted; day
-      boundaries use local time.
-      PIN lock per SPEC: `src/domain/pin.ts` (pure `hashPin(pin, salt)`, `verifyPin`,
-      `generateRecoveryCode`), `pinHash`/`pinSalt`/`recoveryHash` in the settings table,
-      `src/components/PinPrompt.tsx` (numeric keypad ≥ 48px, masked dots, lockout message),
-      first-run set-PIN flow with the recovery code shown once, unlock state held in App.tsx with
-      a 5-minute expiry. Admin and Void use it.
+      boundaries use local time; a db test opens a v1 database holding products and orders,
+      upgrades it to v2, and shows the migration keeps existing data (every product and order
+      still present and unchanged, and the new `settings` table usable).
+
+- [ ] **7b. Admin screen + PIN lock.** Admin screen for products (add, edit name/price/category,
+      toggle out of stock, archive) and settings (shop name, PromptPay ID, category order), on
+      top of 7a's `settings` table. PIN lock per SPEC: `src/domain/pin.ts` (pure `hashPin(pin,
+      salt)`, `verifyPin`, `generateRecoveryCode`), `pinHash`/`pinSalt`/`recoveryHash` in the
+      settings table, `src/components/PinPrompt.tsx` (numeric keypad ≥ 48px, masked dots, lockout
+      message), first-run set-PIN flow with the recovery code shown once, unlock state held in
+      App.tsx with a 5-minute expiry. Admin and Void use it.
       _Accept:_ tests — wrong PIN rejected and never stored in plain text; 5 wrong attempts lock
       for 60s; unlock expires after 5 minutes; recovery code resets the PIN; Sell → Cart → Cash
       never shows the prompt.
