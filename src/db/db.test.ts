@@ -1,9 +1,10 @@
 import Dexie from 'dexie'
 import { describe, expect, it } from 'vitest'
-import { SETTINGS_ID, type Settings } from '../domain/settings'
+import { DEFAULT_SETTINGS, SETTINGS_ID, type Settings } from '../domain/settings'
 import type { Order, Product } from '../domain/types'
 import { PosDatabase } from './db'
 import { completeOrder, todaysOrders } from './orders'
+import { getSettings, saveSettings } from './settings'
 
 /**
  * A genuine schema-v1 database: a bare `new Dexie(name)` that declares
@@ -166,16 +167,18 @@ describe('PosDatabase schema v1 -> v2', () => {
     const database = new PosDatabase(name)
     await database.open()
 
-    // No row is created by the upgrade itself.
+    // No row is created by the upgrade itself, so an upgraded device reads
+    // the defaults until its first Admin save.
     expect(await database.settings.count()).toBe(0)
+    await expect(getSettings(database)).resolves.toEqual(DEFAULT_SETTINGS)
 
     const saved: Settings = {
       id: SETTINGS_ID,
       shopName: 'Sunrise Bakery',
       promptPayId: '0812345678',
     }
-    await database.settings.put(saved)
-    expect(await database.settings.get(SETTINGS_ID)).toEqual(saved)
+    await saveSettings(saved, database)
+    await expect(getSettings(database)).resolves.toEqual(saved)
     database.close()
   })
 })
