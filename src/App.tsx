@@ -9,6 +9,7 @@ import { HOME_SCREEN, SCREEN_TITLES, type Screen, type ScreenProps } from './nav
 import { CartScreen } from './screens/CartScreen'
 import { CashScreen } from './screens/CashScreen'
 import { PlaceholderScreen } from './screens/PlaceholderScreen'
+import { PromptPayScreen } from './screens/PromptPayScreen'
 import { SellScreen } from './screens/SellScreen'
 
 /**
@@ -33,7 +34,7 @@ const screens: Record<Screen, (props: ScreenProps) => ReactNode> = {
   // Keep this comment between `cash` and `promptpay`: tasks 4 and 5 each
   // change one of those lines on separate branches, and git treats edits to
   // adjacent lines as a conflict.
-  promptpay: (props) => <PlaceholderScreen {...props} title={SCREEN_TITLES.promptpay} />,
+  promptpay: (props) => <PromptPayScreen {...props} />,
   orders: (props) => <PlaceholderScreen {...props} title={SCREEN_TITLES.orders} />,
   report: (props) => <PlaceholderScreen {...props} title={SCREEN_TITLES.report} />,
   admin: (props) => <PlaceholderScreen {...props} title={SCREEN_TITLES.admin} />,

@@ -1,0 +1,79 @@
+/*
+ * PromptPay checkout screen. Shared checkout layout (.screen, .screen-header,
+ * .back-button, .bottom-bar, .checkout-total, .checkout-error) lives in
+ * src/index.css; everything specific to this screen lives here, prefixed
+ * `promptpay-`.
+ */
+
+.promptpay-message {
+  padding: 24px 4px;
+}
+
+.promptpay-qr-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin: 8px 0 24px;
+}
+
+.promptpay-warning {
+  margin: 0;
+  padding: 8px 16px;
+  border: 2px solid #b3261e;
+  border-radius: 8px;
+  background: #fdecea;
+  color: #b3261e;
+  font-weight: 600;
+  text-align: center;
+}
+
+.promptpay-qr {
+  background: #fff;
+  border-radius: 12px;
+  padding: 12px;
+}
+
+/*
+ * .bottom-bar (src/index.css) sets `padding-bottom: calc(12px +
+ * env(safe-area-inset-bottom))` for CartScreen's two-button bar. This bar
+ * holds a single 48px button, so it only needs side padding here — set as
+ * individual longhands, never the `padding` shorthand, since a shorthand
+ * would silently zero out that inherited padding-bottom (and add an unused
+ * padding-top) even though both selectors have equal specificity, because
+ * this rule loads after index.css. That bug made the bar 72px tall
+ * (12 + 48 + 12) with 12px of dead space above the button — enough for a
+ * fast double-tap right after "Paid — done" to land on a Sell product tile
+ * underneath, and it put the button inside the iPhone home-indicator zone.
+ * With this, the bar is exactly 48px + the safe-area inset, top edge lined
+ * up with .cart-bar's.
+ */
+.promptpay-bottom-bar {
+  padding-top: 0;
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: 20px;
+  padding-right: 20px;
+  /* Opaque: a sticky bar over scrollable content must never show the grid
+     through it, and this bar (unlike .cart-bar) has no background of its
+     own from a shared rule. Neutral, not the button's green — sharing that
+     colour with the enabled Paid button made the whole inset strip (not
+     just the button) look tappable. */
+  background: var(--bg);
+}
+
+.promptpay-paid-button {
+  width: 100%;
+  min-height: var(--tap);
+  border: none;
+  border-radius: 8px;
+  background: #2f6f4e;
+  color: #fff;
+  font: inherit;
+  font-size: 1.1rem;
+  font-weight: 700;
+  touch-action: manipulation;
+}
+
+.promptpay-paid-button:disabled {
+  background: var(--muted);
+}

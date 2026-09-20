@@ -2,41 +2,17 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { PosDatabase } from './db/db'
-import { completeOrder } from './db/orders'
-import type { ScreenProps } from './navigation'
-import type { PlaceholderScreenProps } from './screens/PlaceholderScreen'
 
-// App-level tests for the PromptPay checkout path. Owned by task 5, which
-// replaces the placeholder with the real PromptPayScreen and rewrites this
-// file around it; task 4 must not edit it (see App.cash.test.tsx).
-//
-// Until then, this stands in for the PromptPay screen: the placeholder
-// receives the full ScreenProps from the registry, so it adds a "Simulate
-// sale" button that does what the real screen's "Paid — done" will do —
-// store the order with completeOrder, then hand it to onOrderComplete.
-vi.mock('./screens/PlaceholderScreen', async () => {
-  const actual = await vi.importActual<typeof import('./screens/PlaceholderScreen')>(
-    './screens/PlaceholderScreen',
-  )
-  return {
-    PlaceholderScreen: (props: PlaceholderScreenProps & Partial<ScreenProps>) => {
-      const { cart, database, onOrderComplete } = props
-      const simulateSale = async () => {
-        if (!cart || !database || !onOrderComplete) return
-        const payment = { method: 'promptpay' as const, confirmedAt: new Date().toISOString() }
-        onOrderComplete(await completeOrder(cart.lines, payment, database))
-      }
-      return (
-        <>
-          <actual.PlaceholderScreen {...props} />
-          <button type="button" onClick={() => void simulateSale()}>
-            Simulate sale
-          </button>
-        </>
-      )
-    },
-  }
-})
+// App-level tests for the PromptPay checkout path, now built around the real
+// PromptPayScreen (task 5). Task 4's equivalent lives in App.cash.test.tsx
+// and must not edit this file (see the comment in App.tsx's screen registry).
+
+// The real QRCodeSVG renders plain SVG (no canvas), so it's fine under
+// jsdom, but these tests don't care about the QR itself — this mock just
+// keeps them from rendering (and depending on) an actual QR code.
+vi.mock('qrcode.react', () => ({
+  QRCodeSVG: () => <svg data-testid="promptpay-qr" />,
+}))
 
 let database: PosDatabase
 
@@ -61,10 +37,13 @@ async function addCroissantAndOpenPromptPay() {
 }
 
 describe('App — PromptPay checkout', () => {
-  it('goes Sell -> Cart -> PromptPay -> Back to Sell with the cart intact', async () => {
+  it('goes Sell -> Cart -> PromptPay -> Cancel (to Cart) -> Back to Sell with the cart intact', async () => {
     render(<App database={database} />)
     await addCroissantAndOpenPromptPay()
 
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    await screen.findByRole('heading', { name: 'Cart' })
     fireEvent.click(screen.getByRole('button', { name: 'Back to Sell' }))
 
     await screen.findByRole('button', { name: /Cart:/ })
@@ -76,7 +55,7 @@ describe('App — PromptPay checkout', () => {
     render(<App database={database} />)
     await addCroissantAndOpenPromptPay()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Simulate sale' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Paid — done' }))
 
     // The status region is always mounted, so wait for its text, not the region.
     await waitFor(() => {
@@ -93,13 +72,30 @@ describe('App — PromptPay checkout', () => {
     expect(screen.getByRole('status')).toBeEmptyDOMElement()
   })
 
+  it('a second consecutive PromptPay sale shows "Order #2 — paid" with 2 orders stored', async () => {
+    render(<App database={database} />)
+    await addCroissantAndOpenPromptPay()
+    fireEvent.click(screen.getByRole('button', { name: 'Paid — done' }))
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('Order #1 — paid')
+    })
+
+    await addCroissantAndOpenPromptPay()
+    fireEvent.click(screen.getByRole('button', { name: 'Paid — done' }))
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('Order #2 — paid')
+    })
+
+    expect(await database.orders.count()).toBe(2)
+  })
+
   it('never calls fetch on the way to a completed PromptPay sale', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(() => {
       throw new Error('fetch should never be called on the checkout path')
     })
     render(<App database={database} />)
     await addCroissantAndOpenPromptPay()
-    fireEvent.click(screen.getByRole('button', { name: 'Simulate sale' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Paid — done' }))
     await waitFor(() => {
       expect(screen.getByRole('status')).toHaveTextContent('Order #1')
     })
