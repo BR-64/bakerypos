@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PosDatabase } from '../db/db'
 import { localDayKey } from '../domain/day'
 import { buildZReport, formatZReport } from '../domain/report'
-import { SETTINGS_ID, type Settings } from '../domain/settings'
+import { DEFAULT_SETTINGS, type Settings } from '../domain/settings'
 import type { CartLine, Order, Payment } from '../domain/types'
 import { ReportScreen } from './ReportScreen'
 
@@ -31,7 +31,7 @@ function installNavigatorApi(name: 'share' | 'clipboard', value: unknown): void 
 }
 
 const settings: Settings = {
-  id: SETTINGS_ID,
+  ...DEFAULT_SETTINGS,
   shopName: 'Sunrise Bakery',
   promptPayId: '0812345678',
 }

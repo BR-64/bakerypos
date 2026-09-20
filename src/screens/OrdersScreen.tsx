@@ -2,6 +2,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, useRef, useState } from 'react'
 import './OrdersScreen.css'
 import { ErrorBoundary } from '../components/ErrorBoundary'
+import { PinPrompt } from '../components/PinPrompt'
 import { db, type PosDatabase } from '../db/db'
 import { todaysOrders } from '../db/orders'
 import { partitionCartLines } from '../domain/cart'
@@ -9,13 +10,26 @@ import { formatLocalTime } from '../domain/day'
 import { safeString } from '../domain/log'
 import { formatBaht, lineTotal } from '../domain/money'
 import { partitionOrders } from '../domain/order'
+import type { Settings } from '../domain/settings'
 import type { CartLine, Order } from '../domain/types'
 import { MAX_VOID_REASON_LENGTH, normalizeVoidReason, VOID_REASONS } from '../domain/voidReason'
 import { useLogInvalidOnce } from '../hooks/useLogInvalidOnce'
+import type { PinLock } from '../hooks/usePinLock'
 import { useVoidOrder } from '../hooks/useVoidOrder'
 
 export interface OrdersScreenProps {
   database?: PosDatabase
+  /**
+   * The Admin PIN lock, shared with Admin (App creates it once). Voiding
+   * an order is behind it — it rewrites a day's takings — while looking
+   * through the list and the detail is not: staff check an order all day
+   * without ever seeing the keypad.
+   */
+  pinLock: PinLock
+  /** Stored settings for the PIN prompt; `null` while the read is in flight. */
+  settings: Settings | null
+  /** True when that read failed — the prompt then refuses to unlock anything. */
+  settingsFailed?: boolean
 }
 
 /**
@@ -33,7 +47,12 @@ export interface OrdersScreenProps {
  * the query rejects, "Try again" remounts and retries it, "Reload" falls
  * back to reloading the page.
  */
-export function OrdersScreen({ database = db }: OrdersScreenProps) {
+export function OrdersScreen({
+  database = db,
+  pinLock,
+  settings,
+  settingsFailed = false,
+}: OrdersScreenProps) {
   const [retryKey, setRetryKey] = useState(0)
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
@@ -57,6 +76,9 @@ export function OrdersScreen({ database = db }: OrdersScreenProps) {
           selectedId={selectedId}
           onSelect={setSelectedId}
           onBack={() => setSelectedId(null)}
+          pinLock={pinLock}
+          settings={settings}
+          settingsFailed={settingsFailed}
         />
       </ErrorBoundary>
     </main>
@@ -68,6 +90,9 @@ interface OrdersBodyProps {
   selectedId: string | null
   onSelect: (id: string) => void
   onBack: () => void
+  pinLock: PinLock
+  settings: Settings | null
+  settingsFailed: boolean
 }
 
 /**
@@ -86,7 +111,15 @@ function describeInvalidOrder(order: unknown): string {
   return `OrdersScreen: skipping invalid order ${invalidOrderKey(order)} — ${safeString(order)}`
 }
 
-function OrdersBody({ database, selectedId, onSelect, onBack }: OrdersBodyProps) {
+function OrdersBody({
+  database,
+  selectedId,
+  onSelect,
+  onBack,
+  pinLock,
+  settings,
+  settingsFailed,
+}: OrdersBodyProps) {
   // The day range is computed fresh inside this callback (via
   // `todaysOrders`'s own `new Date()` default) every time it reruns — never
   // hoisted into the dependency array, where a `Date` object would compare
@@ -117,7 +150,16 @@ function OrdersBody({ database, selectedId, onSelect, onBack }: OrdersBodyProps)
         </div>
       )
     }
-    return <OrderDetail order={selected} database={database} onBack={onBack} />
+    return (
+      <OrderDetail
+        order={selected}
+        database={database}
+        onBack={onBack}
+        pinLock={pinLock}
+        settings={settings}
+        settingsFailed={settingsFailed}
+      />
+    )
   }
 
   return (
@@ -175,6 +217,9 @@ interface OrderDetailProps {
   order: Order
   database: PosDatabase
   onBack: () => void
+  pinLock: PinLock
+  settings: Settings | null
+  settingsFailed: boolean
 }
 
 /**
@@ -183,7 +228,14 @@ interface OrderDetailProps {
  * fields only) by reusing `partitionCartLines` — a corrupt line is skipped
  * and logged, never crashes the detail, and never blocks voiding the order.
  */
-function OrderDetail({ order, database, onBack }: OrderDetailProps) {
+function OrderDetail({
+  order,
+  database,
+  onBack,
+  pinLock,
+  settings,
+  settingsFailed,
+}: OrderDetailProps) {
   const rawLines: CartLine[] = Array.isArray(order.lines) ? order.lines : []
   const { valid: validLines, invalid: invalidLines } = partitionCartLines(rawLines)
   useLogInvalidOnce(
@@ -209,9 +261,12 @@ function OrderDetail({ order, database, onBack }: OrderDetailProps) {
     setOtherText('')
   })
 
+  // `pinLock.unlocked` is a dependency too: when the panel opens locked,
+  // the reason panel (and so the button this focuses) only appears once the
+  // PIN has been entered.
   useEffect(() => {
-    if (voidPanelOpen) keepButtonRef.current?.focus()
-  }, [voidPanelOpen])
+    if (voidPanelOpen && pinLock.unlocked) keepButtonRef.current?.focus()
+  }, [voidPanelOpen, pinLock.unlocked])
 
   const isVoided = order.status === 'voided'
   const reasonInput = reasonChoice === 'Other' ? otherText : reasonChoice
@@ -265,6 +320,18 @@ function OrderDetail({ order, database, onBack }: OrderDetailProps) {
 
       {isVoided ? (
         <p className="orders-detail-void-reason muted">Void reason: {order.voidReason}</p>
+      ) : voidPanelOpen && !pinLock.unlocked ? (
+        // Voiding rewrites a day's takings, so it sits behind the same PIN
+        // as Admin (docs/SPEC.md). Unlocking here also opens Admin for the
+        // rest of the 5 minutes — one person, one phone, one unlock.
+        <PinPrompt
+          settings={settings}
+          settingsFailed={settingsFailed}
+          lock={pinLock}
+          database={database}
+          purpose="Void"
+          onCancel={closeVoidPanel}
+        />
       ) : voidPanelOpen ? (
         <div role="group" aria-label="Void this order?" className="orders-void-confirm">
           <div className="orders-void-reasons">

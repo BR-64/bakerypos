@@ -50,7 +50,9 @@ export function visibleCategories(
   products: Product[],
   order: Category[] = CATEGORY_ORDER,
 ): Category[] {
-  const present = new Set(products.filter((p) => isKnownCategory(p.category)).map((p) => p.category))
+  const present = new Set(
+    products.filter((p) => isKnownCategory(p.category)).map((p) => p.category),
+  )
   const seen = new Set<Category>()
   const tabs: Category[] = []
   for (const category of [...order, ...CATEGORY_ORDER]) {

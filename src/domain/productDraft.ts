@@ -38,9 +38,7 @@ export interface ProductValues {
   category: Category
 }
 
-export type ProductDraftResult =
-  | { ok: true; values: ProductValues }
-  | { ok: false; error: string }
+export type ProductDraftResult = { ok: true; values: ProductValues } | { ok: false; error: string }
 
 /**
  * Validate one add/edit form submission.

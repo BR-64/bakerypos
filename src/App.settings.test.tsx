@@ -4,7 +4,7 @@ import App from './App'
 import { PosDatabase } from './db/db'
 import { saveSettings } from './db/settings'
 import { PLACEHOLDER_PROMPTPAY_ID, promptPayPayload } from './domain/promptpay'
-import { SETTINGS_ID, type Settings } from './domain/settings'
+import { DEFAULT_SETTINGS, type Settings } from './domain/settings'
 
 // The real QRCodeSVG renders plain SVG, so it works under jsdom — this
 // mock only makes the encoded `value` readable without decoding a QR.
@@ -26,7 +26,7 @@ afterEach(() => {
 })
 
 const realId = '0812345678'
-const stored: Settings = { id: SETTINGS_ID, shopName: 'Sunrise Bakery', promptPayId: realId }
+const stored: Settings = { ...DEFAULT_SETTINGS, shopName: 'Sunrise Bakery', promptPayId: realId }
 
 const TEST_ID_WARNING = 'Test PromptPay ID — not a real account'
 
@@ -65,7 +65,7 @@ describe('App — PromptPay ID from the settings table', () => {
     expect(screen.getByText(TEST_ID_WARNING)).toBeInTheDocument()
   })
 
-  it('a failing settings read still renders Sell (no crash above the ErrorBoundary) and falls back to the placeholder', async () => {
+  it('a failing settings read still renders Sell, and PromptPay says it is not set up rather than showing a placeholder QR', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     vi.spyOn(database.settings, 'get').mockRejectedValue(new Error('IndexedDB is gone'))
 
@@ -79,10 +79,16 @@ describe('App — PromptPay ID from the settings table', () => {
     expect(screen.queryByText(/something went wrong/i)).not.toBeInTheDocument()
 
     await goToPromptPay()
+
+    // Task 7b: a failed read is no longer treated like "no row yet". We
+    // don't know the shop's ID, so no QR is built from a default the owner
+    // may well have replaced with a real account.
     await waitFor(() =>
-      expect(qr()).toHaveAttribute('data-value', promptPayPayload(PLACEHOLDER_PROMPTPAY_ID, 5500)),
+      expect(screen.getByText('PromptPay isn’t set up — use Cash')).toBeInTheDocument(),
     )
-    expect(screen.getByText(TEST_ID_WARNING)).toBeInTheDocument()
+    expect(qr()).not.toBeInTheDocument()
+    expect(screen.queryByText(TEST_ID_WARNING)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Paid — done' })).toBeDisabled()
   })
 
   it('shows no QR at all while the settings read is still in flight, then the stored one once it lands', async () => {

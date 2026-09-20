@@ -69,7 +69,9 @@ export const DEFAULT_SETTINGS: Settings = {
 export const MAX_SHOP_NAME_LENGTH = 40
 
 function isValidShopName(value: unknown): value is string {
-  return typeof value === 'string' && value.trim().length > 0 && value.length <= MAX_SHOP_NAME_LENGTH
+  return (
+    typeof value === 'string' && value.trim().length > 0 && value.length <= MAX_SHOP_NAME_LENGTH
+  )
 }
 
 function isStoredPromptPayId(value: unknown): value is string {
@@ -108,10 +110,9 @@ function coerceCategoryOrder(value: unknown): Category[] {
  * its own, though, does **not** clear the PIN: the lock keeps working and
  * only the recovery route is gone.
  */
-function coercePinFields(raw: Record<string, unknown>): Pick<
-  Settings,
-  'pinHash' | 'pinSalt' | 'recoveryHash'
-> {
+function coercePinFields(
+  raw: Record<string, unknown>,
+): Pick<Settings, 'pinHash' | 'pinSalt' | 'recoveryHash'> {
   if (!isPinHash(raw.pinHash) || !isPinSalt(raw.pinSalt)) {
     return { pinHash: null, pinSalt: null, recoveryHash: null }
   }

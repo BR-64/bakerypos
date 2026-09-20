@@ -1,6 +1,6 @@
 import Dexie from 'dexie'
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_SETTINGS, SETTINGS_ID, type Settings } from '../domain/settings'
+import { DEFAULT_SETTINGS, type Settings } from '../domain/settings'
 import type { Order, Product } from '../domain/types'
 import { PosDatabase } from './db'
 import { completeOrder, ordersForDay } from './orders'
@@ -177,7 +177,7 @@ describe('PosDatabase schema v1 -> v2', () => {
     await expect(getSettings(database)).resolves.toEqual(DEFAULT_SETTINGS)
 
     const saved: Settings = {
-      id: SETTINGS_ID,
+      ...DEFAULT_SETTINGS,
       shopName: 'Sunrise Bakery',
       promptPayId: '0812345678',
     }

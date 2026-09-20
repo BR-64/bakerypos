@@ -64,11 +64,13 @@ function Harness({
   navigate = () => {},
   onOrderComplete = () => {},
   promptPayId = PLACEHOLDER_PROMPTPAY_ID,
+  settingsFailed = false,
 }: {
   initial?: CartLine[]
   navigate?: (s: Screen) => void
   onOrderComplete?: (order: Order) => void
   promptPayId?: string | null
+  settingsFailed?: boolean
 }) {
   const cart = useCart(initial)
   return (
@@ -78,6 +80,7 @@ function Harness({
       database={database}
       onOrderComplete={onOrderComplete}
       promptPayId={promptPayId}
+      settingsFailed={settingsFailed}
     />
   )
 }
@@ -264,11 +267,25 @@ describe('PromptPayScreen', () => {
     expect(screen.getByRole('button', { name: 'Paid — done' })).toBeDisabled()
   })
 
-  it('an invalid PromptPay ID shows "PromptPay isn\'t set up", no QR, and a disabled Paid button', () => {
+  it('an invalid PromptPay ID shows "PromptPay isn\'t set up — use Cash", no QR, and a disabled Paid button', () => {
     render(<Harness initial={[croissantLine]} promptPayId="not-an-id" />)
 
-    expect(screen.getByText("PromptPay isn't set up")).toBeInTheDocument()
+    expect(screen.getByText('PromptPay isn’t set up — use Cash')).toBeInTheDocument()
     expect(qr()).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Paid — done' })).toBeDisabled()
+  })
+
+  it('a failed settings read shows the same message, never a QR for the placeholder account', () => {
+    // Task 7b: before this, a failed read was indistinguishable from "no
+    // settings row yet" and produced a placeholder QR — a shop with a real
+    // ID configured would have had customers scan a QR paying nobody.
+    render(
+      <Harness initial={[croissantLine]} promptPayId={PLACEHOLDER_PROMPTPAY_ID} settingsFailed />,
+    )
+
+    expect(screen.getByText('PromptPay isn’t set up — use Cash')).toBeInTheDocument()
+    expect(qr()).not.toBeInTheDocument()
+    expect(screen.queryByText('Test PromptPay ID — not a real account')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Paid — done' })).toBeDisabled()
   })
 

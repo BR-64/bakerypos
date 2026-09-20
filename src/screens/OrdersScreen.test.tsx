@@ -3,7 +3,11 @@ import { StrictMode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PosDatabase } from '../db/db'
 import { completeOrder } from '../db/orders'
+import { saveSettings } from '../db/settings'
+import { generateSalt, hashPin, MAX_PIN_ATTEMPTS } from '../domain/pin'
+import { DEFAULT_SETTINGS, type Settings } from '../domain/settings'
 import type { Order } from '../domain/types'
+import type { PinLock } from '../hooks/usePinLock'
 import { OrdersScreen } from './OrdersScreen'
 
 let database: PosDatabase
@@ -33,9 +37,31 @@ function makeOrder(overrides: Partial<Order> = {}): Order {
   }
 }
 
+function stubLock(overrides: Partial<PinLock> = {}): PinLock {
+  return {
+    unlocked: true,
+    lockoutMsLeft: 0,
+    attemptsLeft: MAX_PIN_ATTEMPTS,
+    unlock: vi.fn(),
+    lock: vi.fn(),
+    registerFailure: vi.fn(),
+    ...overrides,
+  }
+}
+
+/**
+ * The screen with the PIN already unlocked, which is the state every test
+ * below except the "void is behind the PIN" ones cares about: browsing
+ * orders never asks for a PIN, and these tests are about the list, the
+ * detail and voiding itself.
+ */
+function Orders({ database, lock = stubLock() }: { database: PosDatabase; lock?: PinLock }) {
+  return <OrdersScreen database={database} pinLock={lock} settings={DEFAULT_SETTINGS} />
+}
+
 describe('OrdersScreen', () => {
   it('shows "No orders yet today." when there are none', async () => {
-    render(<OrdersScreen database={database} />)
+    render(<Orders database={database} />)
     expect(await screen.findByText('No orders yet today.')).toBeInTheDocument()
   })
 
@@ -47,7 +73,7 @@ describe('OrdersScreen', () => {
       database,
     )
 
-    render(<OrdersScreen database={database} />)
+    render(<Orders database={database} />)
 
     const row1 = await screen.findByRole('button', { name: /#1/ })
     expect(row1).toHaveTextContent('฿55')
@@ -62,7 +88,7 @@ describe('OrdersScreen', () => {
       makeOrder({ id: 'o-voided', number: 1, status: 'voided', voidReason: 'test' }),
     )
 
-    render(<OrdersScreen database={database} />)
+    render(<Orders database={database} />)
 
     const row = await screen.findByRole('button', { name: /#1/ })
     expect(row).toHaveTextContent('Voided')
@@ -74,7 +100,7 @@ describe('OrdersScreen', () => {
     await database.orders.add(makeOrder({ id: 'o-yesterday', createdAt: yesterday.toISOString() }))
     await database.orders.add(makeOrder({ id: 'o-today', number: 2 }))
 
-    render(<OrdersScreen database={database} />)
+    render(<Orders database={database} />)
 
     await screen.findByRole('button', { name: /#2/ })
     expect(screen.queryByRole('button', { name: /#1/ })).not.toBeInTheDocument()
@@ -86,7 +112,7 @@ describe('OrdersScreen', () => {
     // total: NaN makes this fail isValidOrder's header check.
     await database.orders.add(makeOrder({ id: 'o-bad', number: 2, total: NaN }))
 
-    render(<OrdersScreen database={database} />)
+    render(<Orders database={database} />)
 
     await screen.findByRole('button', { name: /#1/ })
     expect(screen.queryByRole('button', { name: /#2/ })).not.toBeInTheDocument()
@@ -100,7 +126,7 @@ describe('OrdersScreen', () => {
     })
     await completeOrder([croissant], { method: 'cash', tendered: 5500, change: 0 }, database)
 
-    render(<OrdersScreen database={database} />)
+    render(<Orders database={database} />)
     await screen.findByRole('button', { name: /#1/ })
 
     expect(fetchSpy).not.toHaveBeenCalled()
@@ -122,7 +148,7 @@ describe('OrdersScreen', () => {
       },
     } as unknown as PosDatabase
 
-    render(<OrdersScreen database={flakyDatabase} />)
+    render(<Orders database={flakyDatabase} />)
 
     expect(await screen.findByText(/something went wrong/i)).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /try again/i }))
@@ -135,7 +161,7 @@ describe('OrdersScreen — detail and void', () => {
   it('tapping a row opens the detail with snapshot lines, stored total and cash tendered/change', async () => {
     await completeOrder([croissant], { method: 'cash', tendered: 10000, change: 4500 }, database)
 
-    render(<OrdersScreen database={database} />)
+    render(<Orders database={database} />)
     fireEvent.click(await screen.findByRole('button', { name: /#1/ }))
 
     expect(await screen.findByRole('heading', { name: /Order #1/ })).toBeInTheDocument()
@@ -147,7 +173,7 @@ describe('OrdersScreen — detail and void', () => {
 
   it('Back returns to the list', async () => {
     await completeOrder([croissant], { method: 'cash', tendered: 5500, change: 0 }, database)
-    render(<OrdersScreen database={database} />)
+    render(<Orders database={database} />)
     fireEvent.click(await screen.findByRole('button', { name: /#1/ }))
     await screen.findByRole('heading', { name: /Order #1/ })
 
@@ -162,7 +188,7 @@ describe('OrdersScreen — detail and void', () => {
       { method: 'cash', tendered: 5500, change: 0 },
       database,
     )
-    render(<OrdersScreen database={database} />)
+    render(<Orders database={database} />)
     fireEvent.click(await screen.findByRole('button', { name: /#1/ }))
     await screen.findByRole('heading', { name: /Order #1/ })
 
@@ -189,7 +215,7 @@ describe('OrdersScreen — detail and void', () => {
 
   it('"Other…" requires typed text before "Yes, void" enables', async () => {
     await completeOrder([croissant], { method: 'cash', tendered: 5500, change: 0 }, database)
-    render(<OrdersScreen database={database} />)
+    render(<Orders database={database} />)
     fireEvent.click(await screen.findByRole('button', { name: /#1/ }))
     await screen.findByRole('heading', { name: /Order #1/ })
 
@@ -213,7 +239,7 @@ describe('OrdersScreen — detail and void', () => {
       { method: 'cash', tendered: 5500, change: 0 },
       database,
     )
-    render(<OrdersScreen database={database} />)
+    render(<Orders database={database} />)
     fireEvent.click(await screen.findByRole('button', { name: /#1/ }))
     await screen.findByRole('heading', { name: /Order #1/ })
 
@@ -230,7 +256,7 @@ describe('OrdersScreen — detail and void', () => {
     await completeOrder([croissant], { method: 'cash', tendered: 5500, change: 0 }, database)
     render(
       <StrictMode>
-        <OrdersScreen database={database} />
+        <Orders database={database} />
       </StrictMode>,
     )
     fireEvent.click(await screen.findByRole('button', { name: /#1/ }))
@@ -259,7 +285,7 @@ describe('OrdersScreen — detail and void', () => {
       .spyOn(database.orders, 'update')
       .mockRejectedValueOnce(new Error('disk full'))
 
-    render(<OrdersScreen database={database} />)
+    render(<Orders database={database} />)
     fireEvent.click(await screen.findByRole('button', { name: /#1/ }))
     await screen.findByRole('heading', { name: /Order #1/ })
     fireEvent.click(screen.getByRole('button', { name: 'Void this order' }))
@@ -281,7 +307,7 @@ describe('OrdersScreen — detail and void', () => {
         voidReason: 'already voided',
       }),
     )
-    render(<OrdersScreen database={database} />)
+    render(<Orders database={database} />)
     fireEvent.click(await screen.findByRole('button', { name: /#1/ }))
 
     expect(await screen.findByText('Void reason: already voided')).toBeInTheDocument()
@@ -297,7 +323,7 @@ describe('OrdersScreen — detail and void', () => {
         lines: [croissant, { productId: '', name: '', unitPrice: -1, qty: 0 }],
       }),
     )
-    render(<OrdersScreen database={database} />)
+    render(<Orders database={database} />)
     fireEvent.click(await screen.findByRole('button', { name: /#1/ }))
 
     expect(await screen.findByText('Croissant × 1')).toBeInTheDocument()
@@ -310,7 +336,7 @@ describe('OrdersScreen — detail and void', () => {
 
   it('shows a message, and never auto-navigates, if the open order becomes unavailable', async () => {
     await database.orders.add(makeOrder({ id: 'o-1', number: 1 }))
-    render(<OrdersScreen database={database} />)
+    render(<Orders database={database} />)
     fireEvent.click(await screen.findByRole('button', { name: /#1/ }))
     await screen.findByRole('heading', { name: /Order #1/ })
 
@@ -337,7 +363,7 @@ describe('OrdersScreen — detail and void', () => {
       }),
     )
 
-    render(<OrdersScreen database={database} />)
+    render(<Orders database={database} />)
 
     expect(await screen.findByRole('button', { name: /#1/ })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /#2/ })).not.toBeInTheDocument()
@@ -364,7 +390,7 @@ describe('OrdersScreen — detail and void', () => {
       throw new Error('boom (test)')
     })
 
-    render(<OrdersScreen database={database} />)
+    render(<Orders database={database} />)
     fireEvent.click(await screen.findByRole('button', { name: /#1/ }))
     expect(await screen.findByText(/something went wrong/i)).toBeInTheDocument()
 
@@ -387,7 +413,7 @@ describe('OrdersScreen — detail and void', () => {
       .spyOn(database.orders, 'update')
       .mockRejectedValueOnce(new Error('disk full'))
 
-    render(<OrdersScreen database={database} />)
+    render(<Orders database={database} />)
     fireEvent.click(await screen.findByRole('button', { name: /#1/ }))
     await screen.findByRole('heading', { name: /Order #1/ })
     fireEvent.click(screen.getByRole('button', { name: 'Void this order' }))
@@ -409,7 +435,7 @@ describe('OrdersScreen — detail and void', () => {
       { method: 'cash', tendered: 5500, change: 0 },
       database,
     )
-    render(<OrdersScreen database={database} />)
+    render(<Orders database={database} />)
     fireEvent.click(await screen.findByRole('button', { name: /#1/ }))
     await screen.findByRole('heading', { name: /Order #1/ })
     fireEvent.click(screen.getByRole('button', { name: 'Void this order' }))
@@ -422,11 +448,76 @@ describe('OrdersScreen — detail and void', () => {
 
   it('shows the stored total even when it disagrees with the sum of the lines', async () => {
     await database.orders.add(makeOrder({ id: 'o-1', number: 1, lines: [croissant], total: 20000 }))
-    render(<OrdersScreen database={database} />)
+    render(<Orders database={database} />)
     fireEvent.click(await screen.findByRole('button', { name: /#1/ }))
 
     // croissant alone sums to ฿55 — the detail must never recompute this.
     expect(await screen.findByText('Total ฿200')).toBeInTheDocument()
     expect(screen.queryByText('Total ฿55')).not.toBeInTheDocument()
+  })
+})
+
+describe('OrdersScreen — void behind the PIN', () => {
+  async function storedPin(pin: string): Promise<Settings> {
+    const pinSalt = generateSalt()
+    const pinHash = await hashPin(pin, pinSalt)
+    return { ...DEFAULT_SETTINGS, pinHash, pinSalt, recoveryHash: null }
+  }
+
+  async function openDetail(): Promise<void> {
+    fireEvent.click(await screen.findByRole('button', { name: /#1/ }))
+    await screen.findByRole('heading', { name: /Order #1/ })
+  }
+
+  it('asks for the PIN before showing the void reasons, and unlocks on the right one', async () => {
+    const settings = await storedPin('4821')
+    await saveSettings(settings, database)
+    await completeOrder([croissant], { method: 'cash', tendered: 5500, change: 0 }, database)
+    const lock = stubLock({ unlocked: false })
+    render(<OrdersScreen database={database} pinLock={lock} settings={settings} />)
+
+    await openDetail()
+    fireEvent.click(screen.getByRole('button', { name: 'Void this order' }))
+
+    expect(screen.getByRole('heading', { name: 'Enter the PIN for Void' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Duplicate order' })).not.toBeInTheDocument()
+
+    for (const digit of '4821') {
+      fireEvent.click(screen.getByRole('button', { name: digit }))
+    }
+    fireEvent.click(screen.getByRole('button', { name: 'Unlock' }))
+
+    await waitFor(() => expect(lock.unlock).toHaveBeenCalledTimes(1))
+    // The order itself is untouched by unlocking.
+    expect((await database.orders.get((await database.orders.toArray())[0].id))?.status).toBe(
+      'completed',
+    )
+  })
+
+  it('browsing orders never asks for a PIN, even while locked', async () => {
+    await completeOrder([croissant], { method: 'cash', tendered: 5500, change: 0 }, database)
+    render(
+      <OrdersScreen
+        database={database}
+        pinLock={stubLock({ unlocked: false })}
+        settings={DEFAULT_SETTINGS}
+      />,
+    )
+
+    await openDetail()
+
+    expect(screen.getByText('Total ฿55')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '1' })).not.toBeInTheDocument()
+  })
+
+  it('shows the void reasons straight away once the lock is already open', async () => {
+    await completeOrder([croissant], { method: 'cash', tendered: 5500, change: 0 }, database)
+    render(<Orders database={database} />)
+
+    await openDetail()
+    fireEvent.click(screen.getByRole('button', { name: 'Void this order' }))
+
+    expect(screen.getByRole('button', { name: 'Duplicate order' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Unlock' })).not.toBeInTheDocument()
   })
 })

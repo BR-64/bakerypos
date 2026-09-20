@@ -29,6 +29,19 @@ export interface PromptPayScreenProps {
    * QR built from a placeholder that might not be what's actually stored.
    */
   promptPayId: string | null
+  /**
+   * True when the settings read **failed**, so `promptPayId` is a default
+   * that was never stored. The screen then says "PromptPay isn't set up —
+   * use Cash" and shows no QR at all.
+   *
+   * Task 7b changed this deliberately: before, a failed read looked exactly
+   * like "no settings row yet" and produced a placeholder QR. A shop that
+   * *has* configured a real ID would then have had a customer scan a QR
+   * paying the fake placeholder account, with only a small warning line to
+   * say so. "No row yet" still shows the placeholder QR and its test-ID
+   * warning — that case genuinely has nothing stored to contradict.
+   */
+  settingsFailed?: boolean
 }
 
 /**
@@ -48,6 +61,7 @@ export function PromptPayScreen({
   database = db,
   onOrderComplete,
   promptPayId,
+  settingsFailed = false,
 }: PromptPayScreenProps) {
   const { pending, error, complete } = useCompleteOrder(cart.lines, database, onOrderComplete)
 
@@ -55,7 +69,10 @@ export function PromptPayScreen({
   const isZero = cart.total <= 0
   const amountFits = canEncodePromptPayAmount(cart.total)
   const idLoaded = promptPayId !== null
-  const idValid = idLoaded && isValidPromptPayId(promptPayId)
+  // A failed settings read means we don't know the shop's ID — the value
+  // passed in is a default, not something stored — so it is treated as
+  // "not set up" rather than as an ID to build a QR from.
+  const idValid = idLoaded && !settingsFailed && isValidPromptPayId(promptPayId)
   const isTestId = promptPayId === PLACEHOLDER_PROMPTPAY_ID
   const showQr = !isEmpty && !isZero && amountFits && idValid
   const payload = showQr && promptPayId !== null ? promptPayPayload(promptPayId, cart.total) : null
@@ -95,7 +112,7 @@ export function PromptPayScreen({
           ) : !idLoaded ? (
             <p className="promptpay-message muted">Loading PromptPay settings…</p>
           ) : !idValid ? (
-            <p className="promptpay-message muted">PromptPay isn't set up</p>
+            <p className="promptpay-message muted">PromptPay isn&rsquo;t set up — use Cash</p>
           ) : (
             <div className="promptpay-qr-wrap">
               {isTestId && (
