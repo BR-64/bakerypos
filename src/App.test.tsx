@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { PosDatabase } from './db/db'
+import { completeOrder } from './db/orders'
 import type { CartScreenProps } from './screens/CartScreen'
 import type { SellScreenProps } from './screens/SellScreen'
 
@@ -217,5 +218,30 @@ describe('App — bottom nav', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Orders' }))
     await screen.findByRole('heading', { name: 'Orders' })
+  })
+
+  it('navigating away from Orders and back closes any open order detail', async () => {
+    await completeOrder(
+      [{ productId: 'p-croissant', name: 'Croissant', unitPrice: 5500, qty: 1 }],
+      { method: 'cash', tendered: 5500, change: 0 },
+      database,
+    )
+    render(<App database={database} />)
+    await screen.findByRole('button', { name: /Croissant/ })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Orders' }))
+    fireEvent.click(await screen.findByRole('button', { name: /^#1/ }))
+    expect(await screen.findByRole('heading', { name: /Order #1/ })).toBeInTheDocument()
+
+    // Orders unmounts entirely while another screen shows (a different
+    // component sits at that position in App's registry), which is what
+    // discards its `selectedId` state — there's nothing here that
+    // remembers "the detail was open" across that gap on purpose.
+    fireEvent.click(screen.getByRole('button', { name: 'Sell' }))
+    await screen.findByRole('button', { name: /Croissant/ })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Orders' }))
+    expect(await screen.findByRole('button', { name: /^#1/ })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: /Order #1/ })).not.toBeInTheDocument()
   })
 })
