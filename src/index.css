@@ -6,6 +6,11 @@
   --muted: #8a7563;
   /* Touch targets: nothing tappable is smaller than this. */
   --tap: 48px;
+  /* Bottom nav bar (Sell/Orders/Report/Admin — see BottomNav.tsx). Not
+     shown on cart/cash/promptpay, so these only matter on screens whose
+     shell carries .app-shell-with-nav. */
+  --nav-h: 56px;
+  --nav-total: calc(var(--nav-h) + env(safe-area-inset-bottom));
   font-family:
     system-ui,
     -apple-system,
@@ -444,4 +449,46 @@ body,
   background: #fdecea;
   color: #b3261e;
   font-weight: 600;
+}
+
+/* Bottom nav bar (Sell/Orders/Report/Admin). Fixed to the viewport bottom,
+   a sibling of the tap-shielded screen content — see App.tsx. */
+.bottom-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 8;
+  display: flex;
+  height: var(--nav-total);
+  padding-bottom: env(safe-area-inset-bottom);
+  background: var(--fg);
+}
+
+.bottom-nav-button {
+  flex: 1;
+  min-height: var(--tap);
+  border: none;
+  background: transparent;
+  color: #cbb8a6;
+  font: inherit;
+  font-weight: 600;
+  touch-action: manipulation;
+}
+
+.bottom-nav-button[aria-current='page'] {
+  color: #fff;
+}
+
+/* When the bottom nav is showing (see App.tsx's .app-shell-with-nav), a
+   screen's own min-height and pinned bottom bar must make room for it,
+   instead of the nav covering the last ~56px of content or a pay button. */
+.app-shell-with-nav .screen {
+  min-height: calc(100dvh - var(--nav-total));
+}
+
+.app-shell-with-nav .bottom-bar {
+  bottom: var(--nav-total);
+  /* The nav already carries the safe-area inset below itself. */
+  padding-bottom: 12px;
 }

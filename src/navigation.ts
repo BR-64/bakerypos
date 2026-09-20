@@ -10,6 +10,20 @@ export type Screen = (typeof SCREENS)[number]
 /** The screen App starts on, and the one every "Back" action returns to. */
 export const HOME_SCREEN: Screen = 'sell'
 
+/**
+ * Screens with a bottom nav bar (see `src/components/BottomNav.tsx`).
+ * Cart/cash/promptpay are deliberately excluded so nothing tappable sits
+ * under the pay buttons during checkout.
+ */
+export const NAV_SCREENS = ['sell', 'orders', 'report', 'admin'] as const
+
+export type NavScreen = (typeof NAV_SCREENS)[number]
+
+/** Whether `screen` should show the bottom nav bar. */
+export function showsBottomNav(screen: Screen): screen is NavScreen {
+  return (NAV_SCREENS as readonly Screen[]).includes(screen)
+}
+
 export const SCREEN_TITLES: Record<Screen, string> = {
   sell: 'Sell',
   cart: 'Cart',

@@ -162,3 +162,60 @@ describe('App', () => {
     expect(screen.queryByRole('button', { name: /back to sell/i })).not.toBeInTheDocument()
   })
 })
+
+describe('App — bottom nav', () => {
+  it('shows the bottom nav on Sell, Orders, Report and Admin, highlighting the current one', async () => {
+    render(<App database={database} />)
+    await screen.findByRole('button', { name: /Croissant/ })
+    expect(screen.getByRole('navigation', { name: 'Main' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Sell' })).toHaveAttribute('aria-current', 'page')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Orders' }))
+    await screen.findByRole('heading', { name: 'Orders' })
+    expect(screen.getByRole('navigation', { name: 'Main' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Orders' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('button', { name: 'Sell' })).not.toHaveAttribute('aria-current')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Report' }))
+    await screen.findByRole('heading', { name: 'Report' })
+    expect(screen.getByRole('navigation', { name: 'Main' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Admin' }))
+    await screen.findByRole('heading', { name: 'Admin' })
+    expect(screen.getByRole('navigation', { name: 'Main' })).toBeInTheDocument()
+  })
+
+  it('hides the bottom nav on Cart, Cash and PromptPay', async () => {
+    render(<App database={database} />)
+    fireEvent.click(await screen.findByRole('button', { name: /Croissant/ }))
+    await waitFor(() => {
+      expect(document.querySelector('.cart-bar-total')?.textContent).toBe('฿55')
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /Cart:/ }))
+    await screen.findByRole('heading', { name: 'Cart' })
+    expect(screen.queryByRole('navigation', { name: 'Main' })).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cash' }))
+    await screen.findByRole('heading', { name: 'Cash' })
+    expect(screen.queryByRole('navigation', { name: 'Main' })).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back to Cart' }))
+    await screen.findByRole('heading', { name: 'Cart' })
+    fireEvent.click(screen.getByRole('button', { name: 'PromptPay' }))
+    await screen.findByRole('heading', { name: 'PromptPay' })
+    expect(screen.queryByRole('navigation', { name: 'Main' })).not.toBeInTheDocument()
+  })
+
+  it('stays usable (navigable) even when the current screen has crashed', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    screenThrowFlags.sell = true
+    render(<App database={database} />)
+
+    expect(await screen.findByText(/something went wrong/i)).toBeInTheDocument()
+    expect(screen.getByRole('navigation', { name: 'Main' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Orders' }))
+    await screen.findByRole('heading', { name: 'Orders' })
+  })
+})

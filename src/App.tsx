@@ -1,11 +1,18 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { BottomNav } from './components/BottomNav'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { OrderToast } from './components/OrderToast'
 import { db, type PosDatabase } from './db/db'
 import { seedIfEmpty } from './db/seed'
 import type { Order } from './domain/types'
 import { useCart } from './hooks/useCart'
-import { HOME_SCREEN, SCREEN_TITLES, type Screen, type ScreenProps } from './navigation'
+import {
+  HOME_SCREEN,
+  SCREEN_TITLES,
+  showsBottomNav,
+  type Screen,
+  type ScreenProps,
+} from './navigation'
 import { CartScreen } from './screens/CartScreen'
 import { CashScreen } from './screens/CashScreen'
 import { PlaceholderScreen } from './screens/PlaceholderScreen'
@@ -73,21 +80,28 @@ export default function App({ database = db }: { database?: PosDatabase }) {
   const dismissOrderToast = useCallback(() => setCompletedOrder(null), [])
 
   const Entry = screens[screen]
+  const showNav = showsBottomNav(screen)
 
   return (
     <>
-      <ErrorBoundary
-        key={`${screen}:${retryKey}`}
-        onRetry={() => setRetryKey((k) => k + 1)}
-        onBack={screen === HOME_SCREEN ? undefined : () => setScreen(HOME_SCREEN)}
-      >
-        <Entry
-          cart={cart}
-          navigate={navigate}
-          database={database}
-          onOrderComplete={onOrderComplete}
-        />
-      </ErrorBoundary>
+      <div className={showNav ? 'app-shell app-shell-with-nav' : 'app-shell'}>
+        <ErrorBoundary
+          key={`${screen}:${retryKey}`}
+          onRetry={() => setRetryKey((k) => k + 1)}
+          onBack={screen === HOME_SCREEN ? undefined : () => setScreen(HOME_SCREEN)}
+        >
+          <Entry
+            cart={cart}
+            navigate={navigate}
+            database={database}
+            onOrderComplete={onOrderComplete}
+          />
+        </ErrorBoundary>
+        {/* A sibling of the ErrorBoundary above, never its child: a crashed
+            screen must still leave the nav usable. Omitted entirely (not
+            just hidden) on cart/cash/promptpay, per `showsBottomNav`. */}
+        {showNav && <BottomNav screen={screen} navigate={navigate} />}
+      </div>
       {/* Always mounted, so screen readers announce the toast when it appears. */}
       <div className="order-toast-region" role="status">
         {completedOrder && (
