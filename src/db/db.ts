@@ -1,4 +1,5 @@
 import Dexie, { type EntityTable } from 'dexie'
+import type { Settings } from '../domain/settings'
 import type { Order, Product } from '../domain/types'
 
 /**
@@ -13,6 +14,7 @@ import type { Order, Product } from '../domain/types'
 export class PosDatabase extends Dexie {
   products!: EntityTable<Product, 'id'>
   orders!: EntityTable<Order, 'id'>
+  settings!: EntityTable<Settings, 'id'>
 
   constructor(name = 'bakery-pos') {
     super(name)
@@ -21,6 +23,23 @@ export class PosDatabase extends Dexie {
       // Booleans (archived, outOfStock) cannot be indexed in IndexedDB — filter in JS.
       products: 'id, category, sortOrder',
       orders: 'id, number, createdAt, status, sync',
+    })
+    // v2 (task 7a): the singleton `settings` row — shop name and PromptPay ID.
+    //
+    // `products` and `orders` are deliberately NOT re-listed here. Dexie
+    // carries every store forward from the previous version untouched, and
+    // re-listing them would mean re-typing their index strings, where a
+    // single typo (e.g. dropping `createdAt`) would silently delete an index
+    // that `ordersForDay`/`todaysOrders` depend on — on every device in the
+    // field, with no error anywhere.
+    //
+    // No `upgrade()` callback: adding a store needs no data transformation,
+    // and existing rows in the other stores are not touched. A device on v1
+    // opens straight into v2 with all its data intact and an empty
+    // `settings` table; `getSettings` falls back to `DEFAULT_SETTINGS` until
+    // the first save creates the row.
+    this.version(2).stores({
+      settings: 'id',
     })
   }
 }
