@@ -246,7 +246,7 @@ Files already in place from the scaffold: `src/domain/{types,money}.ts` (+tests)
       `fetch` is never called. `npm test`, `npm run typecheck`, `npm run lint` and
       `npm run build` pass (run as separate commands).
 
-- [ ] **7a. Settings table + Z report.** `src/domain/settings.ts` (`SETTINGS_ID = 'shop'`,
+- [x] **7a. Settings table + Z report.** `src/domain/settings.ts` (`SETTINGS_ID = 'shop'`,
       `Settings { id; shopName; promptPayId }`, `DEFAULT_SETTINGS` (shopName `'Bakery'`),
       `isValidSettings`, total `coerceSettings` that never throws and corrects *field by field* —
       a corrupt `shopName` must not revert a valid real `promptPayId` to the placeholder, and a
