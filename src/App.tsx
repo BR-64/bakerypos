@@ -20,6 +20,7 @@ import { CashScreen } from './screens/CashScreen'
 import { OrdersScreen } from './screens/OrdersScreen'
 import { PlaceholderScreen } from './screens/PlaceholderScreen'
 import { PromptPayScreen } from './screens/PromptPayScreen'
+import { ReportScreen } from './screens/ReportScreen'
 import { SellScreen } from './screens/SellScreen'
 
 /**
@@ -51,7 +52,7 @@ const screens: Record<Screen, (props: ScreenProps) => ReactNode> = {
     <PromptPayScreen {...props} promptPayId={settings === null ? null : settings.promptPayId} />
   ),
   orders: ({ database }) => <OrdersScreen database={database} />,
-  report: (props) => <PlaceholderScreen {...props} title={SCREEN_TITLES.report} />,
+  report: ({ database, settings }) => <ReportScreen database={database} settings={settings} />,
   admin: (props) => <PlaceholderScreen {...props} title={SCREEN_TITLES.admin} />,
 }
 

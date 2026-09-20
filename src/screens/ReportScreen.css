@@ -1,0 +1,161 @@
+.report-title {
+  font-size: 1.25rem;
+  margin: 0 0 16px;
+}
+
+.report-day {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.report-day-label {
+  font-weight: 600;
+}
+
+.report-day-input {
+  flex: 1;
+  min-height: var(--tap);
+  padding: 0 12px;
+  border: 2px solid var(--accent);
+  border-radius: 8px;
+  background: var(--tile);
+  color: inherit;
+  font: inherit;
+  touch-action: manipulation;
+}
+
+.report-message {
+  padding: 24px 4px;
+}
+
+.report-summary {
+  margin: 0 0 16px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: var(--tile);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.1);
+}
+
+.report-summary-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+}
+
+.report-summary-row dt {
+  font-weight: 600;
+}
+
+.report-summary-row dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.report-summary-drawer {
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid rgb(0 0 0 / 0.12);
+  font-size: 1.1rem;
+}
+
+.report-heading {
+  font-size: 1rem;
+  margin: 0 0 8px;
+}
+
+.report-products {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.report-product {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid rgb(0 0 0 / 0.08);
+}
+
+.report-product-name {
+  flex: 1;
+  min-width: 0;
+}
+
+.report-product-units {
+  min-width: 44px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.report-product-revenue {
+  min-width: 80px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.report-voided,
+.report-note {
+  margin: 0 0 8px;
+}
+
+.report-share-fallback {
+  margin-bottom: 16px;
+}
+
+.report-share-textarea {
+  width: 100%;
+  padding: 12px;
+  border: 2px solid var(--accent);
+  border-radius: 8px;
+  background: var(--tile);
+  color: inherit;
+  font: inherit;
+  font-size: 0.9rem;
+  /* index.css turns selection off for the whole app (no accidental
+     text-select at the counter), which would make a "copy this by hand"
+     textarea impossible to copy. */
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.report-bottom-bar {
+  min-height: 64px;
+  padding-top: 12px;
+  padding-left: 20px;
+  padding-right: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  background: var(--fg);
+  color: #fff;
+}
+
+.report-share-copied {
+  font-weight: 600;
+}
+
+.report-share-button {
+  min-height: var(--tap);
+  min-width: 140px;
+  padding: 0 24px;
+  border: none;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  font-size: 1.1rem;
+  font-weight: 600;
+  touch-action: manipulation;
+}
+
+.report-share-button:disabled {
+  background: var(--muted);
+}
