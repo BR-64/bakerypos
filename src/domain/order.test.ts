@@ -76,6 +76,25 @@ describe('isValidOrder', () => {
   })
 
   it.each([
+    ['a missing voidReason', { ...validVoidedOrder, voidReason: undefined }],
+    ['a non-string (object) voidReason', { ...validVoidedOrder, voidReason: { note: 'x' } }],
+    ['a non-string (number) voidReason', { ...validVoidedOrder, voidReason: 42 }],
+  ])(
+    'rejects a voided order with %s (it would crash rendering "Void reason: …")',
+    (_label, order) => {
+      expect(isValidOrder(order)).toBe(false)
+    },
+  )
+
+  it('accepts a voided order with an empty-string voidReason (still a string, so still safe to render)', () => {
+    expect(isValidOrder({ ...validVoidedOrder, voidReason: '' })).toBe(true)
+  })
+
+  it('a non-string voidReason on a *completed* order does not matter (only checked when voided)', () => {
+    expect(isValidOrder({ ...validCashOrder, voidReason: { note: 'x' } })).toBe(true)
+  })
+
+  it.each([
     ['a missing payment', { ...validCashOrder, payment: undefined }],
     ['a null payment', { ...validCashOrder, payment: null }],
     ['an unknown payment method', { ...validCashOrder, payment: { method: 'crypto' } }],

@@ -41,6 +41,13 @@ function isValidPayment(payment: unknown): boolean {
  * - `status` exactly `'completed'` or `'voided'` — never guessed from
  *   truthiness
  * - `payment` well-shaped for its `method` (see `isValidPayment`)
+ * - when `status === 'voided'`, `voidReason` is a `string` — the Orders
+ *   detail renders it directly as text (`Void reason: {order.voidReason}`),
+ *   so an object or other non-string value here must be caught as invalid
+ *   *before* it ever reaches render, or React throws "Objects are not
+ *   valid as a React child" and (since `selectedId` lives above the inner
+ *   `ErrorBoundary`) "Try again" would just re-open the same corrupt order
+ *   and crash again
  *
  * Lines are deliberately not checked here — a list row never renders them
  * (it shows `formatBaht(order.total)`, the *stored* total, never a
@@ -57,7 +64,7 @@ function isValidPayment(payment: unknown): boolean {
 export function isValidOrder(order: unknown): order is Order {
   if (typeof order !== 'object' || order === null || Array.isArray(order)) return false
   const o = order as Record<string, unknown>
-  return (
+  const validHeader =
     typeof o.id === 'string' &&
     o.id.length > 0 &&
     Number.isSafeInteger(o.number) &&
@@ -66,7 +73,9 @@ export function isValidOrder(order: unknown): order is Order {
     isParseableTimestamp(o.createdAt) &&
     (o.status === 'completed' || o.status === 'voided') &&
     isValidPayment(o.payment)
-  )
+  if (!validHeader) return false
+  if (o.status === 'voided' && typeof o.voidReason !== 'string') return false
+  return true
 }
 
 export interface PartitionedOrders {
