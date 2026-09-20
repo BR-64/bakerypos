@@ -24,22 +24,24 @@ describe('normalizeVoidReason', () => {
     expect(normalizeVoidReason(reason)).toBeNull()
   })
 
-  it('caps length at MAX_VOID_REASON_LENGTH', () => {
-    const long = 'x'.repeat(MAX_VOID_REASON_LENGTH + 50)
-    const result = normalizeVoidReason(long)
-    expect(result).toHaveLength(MAX_VOID_REASON_LENGTH)
-    expect(result).toBe('x'.repeat(MAX_VOID_REASON_LENGTH))
-  })
-
-  it('trims again if the length cap lands mid-whitespace', () => {
-    const long = 'x'.repeat(MAX_VOID_REASON_LENGTH - 1) + '   trailing text cut off here'
-    const result = normalizeVoidReason(long)
-    expect(result).toBe('x'.repeat(MAX_VOID_REASON_LENGTH - 1))
-  })
-
-  it('leaves a reason at exactly the max length untouched', () => {
+  it('accepts a reason at exactly MAX_VOID_REASON_LENGTH, verbatim', () => {
     const exact = 'y'.repeat(MAX_VOID_REASON_LENGTH)
     expect(normalizeVoidReason(exact)).toBe(exact)
+  })
+
+  it('rejects (returns null for) a reason one character over MAX_VOID_REASON_LENGTH, rather than truncating it', () => {
+    const tooLong = 'x'.repeat(MAX_VOID_REASON_LENGTH + 1)
+    expect(normalizeVoidReason(tooLong)).toBeNull()
+  })
+
+  it('rejects a reason far over the limit the same way as one character over', () => {
+    const wayTooLong = 'x'.repeat(MAX_VOID_REASON_LENGTH + 50)
+    expect(normalizeVoidReason(wayTooLong)).toBeNull()
+  })
+
+  it('surrounding whitespace outside the limit does not by itself cause rejection', () => {
+    const padded = `${'   '.repeat(2)}${'x'.repeat(MAX_VOID_REASON_LENGTH)}${'   '.repeat(2)}`
+    expect(normalizeVoidReason(padded)).toBe('x'.repeat(MAX_VOID_REASON_LENGTH))
   })
 
   it('accepts a normal preset reason unchanged', () => {

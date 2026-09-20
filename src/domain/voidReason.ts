@@ -18,16 +18,16 @@ export const MAX_VOID_REASON_LENGTH = 80
 
 /**
  * Normalize a void reason before it's stored: trims leading/trailing
- * whitespace and caps it at `MAX_VOID_REASON_LENGTH` characters (trimming
- * again after the cut, in case it lands mid-whitespace).
- *
- * Returns `null` for a reason that's empty or whitespace-only once
- * trimmed, so a caller can treat "nothing meaningful was entered" as one
- * case — a void without a reason is never allowed, so the Orders screen
- * uses this `null` to keep "Yes, void" disabled.
+ * whitespace, then requires the result to be non-empty and no longer than
+ * `MAX_VOID_REASON_LENGTH` characters — returning `null` for either failure,
+ * rather than silently truncating an over-length reason. Truncating would
+ * quietly store something other than what staff actually typed; returning
+ * `null` instead means the Orders screen's "Yes, void" simply stays
+ * disabled (the same case as an empty reason) until it's short enough,
+ * exactly like every other "not valid yet" state in this codebase.
  */
 export function normalizeVoidReason(reason: string): string | null {
   const trimmed = reason.trim()
-  if (trimmed.length === 0) return null
-  return trimmed.slice(0, MAX_VOID_REASON_LENGTH).trim()
+  if (trimmed.length === 0 || trimmed.length > MAX_VOID_REASON_LENGTH) return null
+  return trimmed
 }
