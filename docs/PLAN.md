@@ -63,7 +63,7 @@ Files already in place from the scaffold: `src/domain/{types,money}.ts` (+tests)
       `SCREENS`, `Screen` union (sell/cart/cash/promptpay/orders/report/admin), `SCREEN_TITLES`,
       `HOME_SCREEN`, `ScreenProps { cart, navigate, database }`. `App.tsx` (optional `database`
       prop) keeps `useState<Screen>(HOME_SCREEN)` and a non-exported `screens: Record<Screen,
-    (props: ScreenProps) => ReactNode>` registry, rendered as `<Entry {...props} />` (a real
+(props: ScreenProps) => ReactNode>` registry, rendered as `<Entry {...props} />` (a real
       component, never called as a plain function during App's render); `navigate` is `setScreen`
       directly, so it's stable across renders. Each screen sits in an `ErrorBoundary` keyed by
       screen + retry count, with a new optional "Back to Sell" (`onBack`) between "Try again" and
@@ -73,7 +73,7 @@ Files already in place from the scaffold: `src/domain/{types,money}.ts` (+tests)
       registry line plus an import, but not always — task 4 also needs an order-confirmation
       toast and task 6 a bottom nav and order-detail view, both App-level additions. Shared
       `.screen`/`.bottom-bar` CSS extracted from `.sell-screen`/`.cart-bar`. `src/screens/
-    CartScreen.tsx` (no Dexie reads): "Back to Sell"; lines with snapshot name, muted unit
+CartScreen.tsx` (no Dexie reads): "Back to Sell"; lines with snapshot name, muted unit
       price, −/qty/+ steppers ≥ 48px labelled "Remove one X"/"Add one X", line total via
       `lineTotal`; inline clear-confirm (a labelled prompt takes "Clear cart"'s place, showing
       "Remove all N item?"/"items?" singular/plural, with "Keep" — which takes focus and sits
@@ -147,7 +147,7 @@ Files already in place from the scaffold: `src/domain/{types,money}.ts` (+tests)
       quiet zone, white background and a `title`; while the ID is still the placeholder, a
       visible "Test PromptPay ID — not a real account" warning above the QR; "Paid — done" in
       the bottom bar calls `useCompleteOrder`'s `complete({method: 'promptpay', confirmedAt:
-    now})`; everything disabled while `pending`; failure keeps the cart and shows `error` in a
+now})`; everything disabled while `pending`; failure keeps the cart and shows `error` in a
       `role="alert"`. States: ฿0 total → "Nothing to charge — use Cash", no QR, Paid disabled;
       invalid ID → "PromptPay isn't set up", no QR; empty cart → empty state. No
       `role="status"`/`<output>` in the screen. QR is rendered locally — no network. Verify the
@@ -176,7 +176,7 @@ Files already in place from the scaffold: `src/domain/{types,money}.ts` (+tests)
       `formatLocalTime(iso)` with a fixed `'en-GB'` locale so CI's locale can't change the
       output). `src/db/orders.ts` gains `todaysOrders(database, now?)` — additive only, do not
       touch `completeOrder`/`voidOrder` — reading `where('createdAt').between(startISO, endISO,
-      true, false)` (fixed-width `toISOString()` strings sort chronologically) and sorting
+true, false)` (fixed-width `toISOString()` strings sort chronologically) and sorting
       newest-first in JS by `createdAt` then `number` as a tiebreaker; document that an order
       with a missing/non-string `createdAt` isn't in the index and so can't appear, a
       deliberate divergence from `sellableProducts`' full `toArray()` (order history grows
@@ -187,8 +187,7 @@ Files already in place from the scaffold: `src/domain/{types,money}.ts` (+tests)
       by reusing `partitionCartLines`, since a row renders no lines and `total` is stored, not
       recomputed. `src/domain/voidReason.ts` (`VOID_REASONS`, `MAX_VOID_REASON_LENGTH = 80`,
       `normalizeVoidReason`). `src/screens/OrdersScreen.tsx` (+ `.css`, classes prefixed
-      `orders-`): `useLiveQuery` inside an inner `ErrorBoundary` like Sell's grid; rows (one
-      >= 48px button each) show number, time, `formatBaht(order.total)`, method and a "Voided"
+      `orders-`): `useLiveQuery` inside an inner `ErrorBoundary` like Sell's grid; rows (one >= 48px button each) show number, time, `formatBaht(order.total)`, method and a "Voided"
       badge; invalid orders are skipped and logged once per id via `useLogInvalidOnce` +
       `safeString`, with a muted "N orders couldn't be displayed." footer so hidden money is
       still counted. The detail is this screen's own `selectedId` state, not a new `Screen`
@@ -202,7 +201,7 @@ Files already in place from the scaffold: `src/domain/{types,money}.ts` (+tests)
       badge and reason instead of the Void button, so double-voiding is impossible.
       `src/navigation.ts` gains `NAV_SCREENS` + `showsBottomNav`; `src/components/BottomNav.tsx`
       renders Sell / Orders / Report / Admin as >= 48px buttons with `aria-current="page"`, and
-      App renders it as a *sibling* of the ErrorBoundary (a crashed screen must still be
+      App renders it as a _sibling_ of the ErrorBoundary (a crashed screen must still be
       navigable) and outside the tap shield. Hidden on cart/cash/promptpay so nothing tappable
       sits under the pay buttons. `src/index.css`: `--nav-h`/`--nav-total`, `.bottom-nav`, and
       under `.app-shell-with-nav` both `.screen { min-height: calc(100dvh - var(--nav-total)) }`
@@ -248,7 +247,7 @@ Files already in place from the scaffold: `src/domain/{types,money}.ts` (+tests)
 
 - [x] **7a. Settings table + Z report.** `src/domain/settings.ts` (`SETTINGS_ID = 'shop'`,
       `Settings { id; shopName; promptPayId }`, `DEFAULT_SETTINGS` (shopName `'Bakery'`),
-      `isValidSettings`, total `coerceSettings` that never throws and corrects *field by field* —
+      `isValidSettings`, total `coerceSettings` that never throws and corrects _field by field_ —
       a corrupt `shopName` must not revert a valid real `promptPayId` to the placeholder, and a
       corrupt `promptPayId` falls back to the placeholder so the test-ID warning shows).
       `src/db/db.ts`: a brand-new `.version(2).stores({ settings: 'id' })` block with version 1
@@ -259,11 +258,11 @@ Files already in place from the scaffold: `src/domain/{types,money}.ts` (+tests)
       upgraded device would never get one anyway); `getSettings` falls back to `DEFAULT_SETTINGS`
       when the row is missing, corrupt, or the read fails, and `saveSettings` upserts with `put`,
       so 7b's first Admin save creates it. `getSettings` is the one db reader that swallows its
-      own errors — `useSettings` is called in `App.tsx`'s body, *above* every `ErrorBoundary`,
+      own errors — `useSettings` is called in `App.tsx`'s body, _above_ every `ErrorBoundary`,
       where a re-thrown rejection would take down Sell, the cart bar and the nav at once.
       `src/config.ts` is **deleted**: `PLACEHOLDER_PROMPTPAY_ID` moves to
       `src/domain/promptpay.ts`, `PROMPTPAY_ID` ceases to exist, `ScreenProps` gains
-      `settings: Settings | null` (`null` means *not loaded yet*, never "use defaults"), App reads
+      `settings: Settings | null` (`null` means _not loaded yet_, never "use defaults"), App reads
       settings once next to `useCart()` so the query is warm before anyone taps PromptPay, and
       `PromptPayScreen`'s `promptPayId` becomes a required `string | null` prop with no
       module-level default — `null` renders "Loading PromptPay settings…", no QR, Paid disabled,
@@ -279,14 +278,14 @@ Files already in place from the scaffold: `src/domain/{types,money}.ts` (+tests)
       totals (cash = expected in drawer), units and revenue per product from snapshot prices,
       `voidedCount`/`voidedTotal` excluded from every total but reported, `invalidCount` via
       `partitionOrders` and `mismatchedTotalCount` via `partitionCartLines`; it re-filters by
-      *parsed* instant against `localDayRange(day)` so an odd-but-parseable `createdAt` can't land
+      _parsed_ instant against `localDayRange(day)` so an odd-but-parseable `createdAt` can't land
       in the wrong day's takings, uses the **stored** `order.total` for the drawer figure, and
       never throws; plus `formatZReport(report, shopName)` for share/copy. The task-6 blind spot
       stands and is documented in `report.ts`: an order whose `createdAt` isn't a Z-normalised ISO
       string is invisible to the indexed read and so appears in no day's report and no count.
       `src/screens/ReportScreen.tsx` (+ `.css`, classes prefixed `report-`): native
       `<input type="date">` (`max` = today) and the inner-`ErrorBoundary` + `useLiveQuery` pattern
-      from `OrdersScreen`, with the picker *outside* the boundary so a crashed body can still be
+      from `OrdersScreen`, with the picker _outside_ the boundary so a crashed body can still be
       escaped by choosing another day, and the query keyed on the `dayKey` **string**, never a
       `Date` (a fresh object each render re-queries forever). `src/hooks/useShareText.ts`:
       `navigator.share` called synchronously from the tap (gesture requirement), `AbortError` =
@@ -325,7 +324,7 @@ Files already in place from the scaffold: `src/domain/{types,money}.ts` (+tests)
       voided line; changing the date input re-queries; an empty day says so; Share copies
       exactly `formatZReport(...)`; a cancelled share shows no error and never touches the
       clipboard; with neither API the text appears selectable. PromptPay tests — a stored real
-      ID renders its QR with no test-ID warning, no stored row renders the placeholder QR *with*
+      ID renders its QR with no test-ID warning, no stored row renders the placeholder QR _with_
       the warning, and an unloaded read renders no QR at all. `fetch` is never called.
       `npm test`, `npm run typecheck`, `npm run lint` and `npm run build` pass (run as separate
       commands).
@@ -333,7 +332,7 @@ Files already in place from the scaffold: `src/domain/{types,money}.ts` (+tests)
 - [x] **7b. Admin screen + PIN lock.** Admin screen for products (add, edit name/price/category,
       toggle out of stock, archive) and settings (shop name, PromptPay ID, category order), on
       top of 7a's `settings` table. PIN lock per SPEC: `src/domain/pin.ts` (pure `hashPin(pin,
-      salt)`, `verifyPin`, `generateRecoveryCode`), `pinHash`/`pinSalt`/`recoveryHash` in the
+salt)`, `verifyPin`, `generateRecoveryCode`), `pinHash`/`pinSalt`/`recoveryHash` in the
       settings table, `src/components/PinPrompt.tsx` (numeric keypad ≥ 48px, masked dots, lockout
       message), first-run set-PIN flow with the recovery code shown once, unlock state held in
       App.tsx with a 5-minute expiry. Admin and Void use it.
@@ -341,11 +340,36 @@ Files already in place from the scaffold: `src/domain/{types,money}.ts` (+tests)
       for 60s; unlock expires after 5 minutes; recovery code resets the PIN; Sell → Cart → Cash
       never shows the prompt.
 
-- [x] **8. PWA polish + device QA.** Offline indicator, install prompt hint, icon set (192/512
-      PNG), Lighthouse PWA pass, manual test in airplane mode on a real phone. Write
-      `docs/DEVICE-QA.md` checklist.
-      _Accept:_ `npm run build && npm run preview` installs on a phone and completes a cash sale
-      offline.
+- - [x] **8. PWA polish + device QA prep.** Offline indicator in the nav bar (navigator.onLine +
+        online/offline events; no network calls). Install hint on first run in a browser tab
+        ("Add to Home screen"), dismissable, never shown once installed (display-mode:
+        standalone). Icon set: 192 and 512 PNG (maskable) generated from the existing SVG and
+        referenced in the manifest. Persist the PIN lockout: store `lockedUntil` in the settings
+        row so the 60-second lock survives force-close. Write `docs/DEVICE-QA.md`: a checklist a
+        human runs on a real phone (install, airplane-mode cash and PromptPay sale, stray tap
+        after sale, 48px targets, void behind PIN, lockout, 5-minute expiry, Z report share,
+        upgrade of a device that already holds data, scan the QR with a real banking app).
+        Files: nav bar component, App.tsx (install hint), public/icons/, vite.config.ts manifest,
+        src/domain/pin.ts + settings for lockedUntil, docs/DEVICE-QA.md.
+        _Accept:_ tests — offline indicator toggles on the online/offline events; install hint
+        hidden in standalone mode; lockout survives a fresh PosDatabase open with lockedUntil in
+        the future. `npm run build` succeeds and the built manifest lists both PNG icons and the
+        service worker precaches the app shell. DEVICE-QA.md exists with every item above.
+        Phone checks themselves are done by a human after merge, not by the agents.
+
+- [ ] **8b. Backup and export.** Admin → Backup: "Export" builds `bakery-pos-YYYY-MM-DD.json`
+
+  (products, orders, settings without pinHash/pinSalt/recoveryHash/lockedUntil) plus
+  `orders-YYYY-MM-DD.csv` (one row per order line: order number, time, product, qty,
+  unit price in baht, line total, payment method, status) and offers both via the share
+  sheet, falling back to a download link. "Import" reads a JSON export, validates it,
+  shows a summary (N products, N orders, N new / N already present), then merges by id in
+  one transaction — never overwrites an existing order, never touches PIN fields. Pure
+  `buildExport` / `parseImport` in `src/domain/backup.ts`; behind the PIN.
+  _Accept:_ tests — export → import on an empty database reproduces every product and
+  order exactly; importing the same file twice adds nothing; a file with a corrupt order
+  is rejected whole with no partial write; CSV totals equal the Z report totals for the
+  same day; money stays integer satang in JSON and two-decimal baht in CSV.
 
 - [ ] **9. (Later) Backend sync.** Minimal Node/Hono API with SQLite, `POST /orders` upsert by
       id, `useSync` pushes `pending` orders when online and marks them `synced`. Owner dashboard
