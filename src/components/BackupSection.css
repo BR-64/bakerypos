@@ -1,0 +1,51 @@
+/* Admin → Backup. Buttons reuse the admin-* classes; only the file input
+   and the download links need anything of their own. Every tap target is
+   at least --tap (48px), like the rest of the app. */
+
+.backup-subheading {
+  font-size: 0.95rem;
+  margin: 20px 0 8px;
+}
+
+.backup-file-input {
+  min-height: var(--tap);
+  width: 100%;
+  padding: 10px 12px;
+  border: 2px dashed var(--accent);
+  border-radius: 8px;
+  background: var(--bg);
+  color: inherit;
+  font: inherit;
+  touch-action: manipulation;
+}
+
+.backup-downloads {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+/* A link, not a button, because only an <a download> can save a file —
+   sized like a button so it is still a thumb-sized target. */
+.backup-download {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--tap);
+  padding: 0 16px;
+  border: 2px solid var(--accent);
+  border-radius: 8px;
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+  word-break: break-all;
+  touch-action: manipulation;
+}
+
+.backup-preview {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--bg);
+}

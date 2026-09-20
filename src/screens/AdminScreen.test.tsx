@@ -85,6 +85,10 @@ describe('AdminScreen — the lock', () => {
     // is even rendered behind the prompt.
     expect(screen.queryByText('Croissant')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Add product' })).not.toBeInTheDocument()
+    // Nor Backup, which would hand whoever picked the phone up every sale
+    // the shop has ever made.
+    expect(screen.queryByRole('button', { name: 'Export' })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Choose a backup file')).not.toBeInTheDocument()
 
     for (const digit of '4821') fireEvent.click(screen.getByRole('button', { name: digit }))
     fireEvent.click(screen.getByRole('button', { name: 'Unlock' }))

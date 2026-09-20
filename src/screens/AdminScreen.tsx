@@ -1,6 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useState } from 'react'
 import './AdminScreen.css'
+import { BackupSection } from '../components/BackupSection'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import { PinPrompt } from '../components/PinPrompt'
 import { db, type PosDatabase } from '../db/db'
@@ -118,6 +119,12 @@ export function AdminScreen({
           broke. */}
       <ErrorBoundary key={retryKey} onRetry={() => setRetryKey((k) => k + 1)}>
         <ProductAdmin database={database} />
+      </ErrorBoundary>
+
+      {/* Its own boundary: Backup reads every order on the device, and a
+          rejected read there must not take the menu above down with it. */}
+      <ErrorBoundary key={`backup-${retryKey}`} onRetry={() => setRetryKey((k) => k + 1)}>
+        <BackupSection database={database} />
       </ErrorBoundary>
     </main>
   )
