@@ -16,6 +16,7 @@ import {
 } from './navigation'
 import { CartScreen } from './screens/CartScreen'
 import { CashScreen } from './screens/CashScreen'
+import { OrdersScreen } from './screens/OrdersScreen'
 import { PlaceholderScreen } from './screens/PlaceholderScreen'
 import { PromptPayScreen } from './screens/PromptPayScreen'
 import { SellScreen } from './screens/SellScreen'
@@ -43,7 +44,7 @@ const screens: Record<Screen, (props: ScreenProps) => ReactNode> = {
   // change one of those lines on separate branches, and git treats edits to
   // adjacent lines as a conflict.
   promptpay: (props) => <PromptPayScreen {...props} />,
-  orders: (props) => <PlaceholderScreen {...props} title={SCREEN_TITLES.orders} />,
+  orders: ({ database }) => <OrdersScreen database={database} />,
   report: (props) => <PlaceholderScreen {...props} title={SCREEN_TITLES.report} />,
   admin: (props) => <PlaceholderScreen {...props} title={SCREEN_TITLES.admin} />,
 }

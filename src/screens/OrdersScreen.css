@@ -1,0 +1,71 @@
+.orders-title {
+  font-size: 1.25rem;
+  margin: 0 0 16px;
+}
+
+.orders-message {
+  padding: 24px 4px;
+}
+
+.orders-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.orders-row {
+  width: 100%;
+  min-height: var(--tap);
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--tile);
+  border: none;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.1);
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  touch-action: manipulation;
+}
+
+.orders-row-number {
+  min-width: 44px;
+  font-weight: 700;
+}
+
+.orders-row-time {
+  min-width: 52px;
+  font-variant-numeric: tabular-nums;
+}
+
+.orders-row-total {
+  flex: 1;
+  font-weight: 600;
+  text-align: right;
+}
+
+.orders-row-method {
+  min-width: 76px;
+  text-align: right;
+}
+
+.orders-row-badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #b3261e;
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.orders-invalid-footer {
+  margin-top: 12px;
+  padding: 8px 4px;
+}
