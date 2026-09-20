@@ -38,12 +38,16 @@ describe('OfflineIndicator', () => {
   })
 
   it('announces itself, and never asks the network whether it is online', () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(() => {
+      throw new Error('the offline indicator must never touch the network')
+    })
     setOnLine(false)
 
     render(<OfflineIndicator />)
 
-    expect(screen.getByRole('status')).toHaveTextContent(OFFLINE_LABEL)
+    // A polite live region, not role="status" — App's order toast owns that
+    // role, and the badge must not compete with it.
+    expect(screen.getByText(OFFLINE_LABEL).parentElement).toHaveAttribute('aria-live', 'polite')
     expect(fetchSpy).not.toHaveBeenCalled()
     fetchSpy.mockRestore()
   })

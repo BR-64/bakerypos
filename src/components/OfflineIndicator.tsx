@@ -16,15 +16,18 @@ export const OFFLINE_LABEL = 'Offline'
  * with the rest of the nav — nothing may sit near the pay buttons, and
  * being offline changes nothing about a sale anyway.
  *
- * The wrapper is always rendered and carries `role="status"`, so a screen
+ * The wrapper is always rendered and is a polite live region, so a screen
  * reader announces the badge appearing rather than silently gaining an
- * element.
+ * element. `aria-live` rather than `role="status"`: App's order-toast
+ * region already owns that role, and two of them would make "the status
+ * region" ambiguous both for assistive tech and for the tests that reach
+ * for the toast by role.
  */
 export function OfflineIndicator() {
   const online = useOnlineStatus()
 
   return (
-    <div className="offline-indicator" role="status">
+    <div className="offline-indicator" aria-live="polite">
       {/* One short word: the nav is narrow, and the full reassurance
           ("sales are still saved on this phone") is the app's whole
           premise rather than news. */}
