@@ -17,8 +17,6 @@ export interface ShareText {
    * `src/index.css` turns selection off for the whole app.
    */
   fallbackText: string | null
-  /** Clear `copied` / `fallbackText` (e.g. when the report changes). */
-  reset: () => void
 }
 
 /** Whether a rejection is the user simply dismissing the share sheet. */
@@ -99,10 +97,5 @@ export function useShareText(): ShareText {
     [copy],
   )
 
-  const reset = useCallback(() => {
-    setCopied(false)
-    setFallbackText(null)
-  }, [])
-
-  return { share, copied, fallbackText, reset }
+  return { share, copied, fallbackText }
 }

@@ -7,10 +7,24 @@ import type { CartLine, Satang } from './types'
 /** One product's share of a day's takings, from the snapshot line prices. */
 export interface ZReportProduct {
   productId: string
-  /** The snapshot name from the first line seen — never today's product name. */
+  /**
+   * The most recent snapshot name for this product on the day — never
+   * today's product name, which may have changed since. See the rename
+   * note in `buildZReport`.
+   */
   name: string
   units: number
   revenue: Satang
+}
+
+/**
+ * `ZReportProduct` plus the bookkeeping that picks its `name`: the instant
+ * and order number of the snapshot the current name came from. Internal —
+ * stripped off before the report is returned.
+ */
+interface ProductAccumulator extends ZReportProduct {
+  nameAt: number
+  nameNumber: number
 }
 
 /** End-of-day (Z) totals for one local calendar day. */
@@ -107,7 +121,7 @@ export function buildZReport(orders: unknown[], day: Date = new Date()): ZReport
   const { valid, invalid } = partitionOrders(Array.isArray(orders) ? orders : [])
   const report = emptyReport(dayKey)
   report.invalidCount = invalid.length
-  const products = new Map<string, ZReportProduct>()
+  const products = new Map<string, ProductAccumulator>()
 
   for (const order of valid) {
     const at = new Date(order.createdAt).getTime()
@@ -151,26 +165,41 @@ export function buildZReport(orders: unknown[], day: Date = new Date()): ZReport
         mismatched = true
         continue
       }
+      // The row is titled with the **most recent** snapshot name for this
+      // product: if it was renamed mid-day, the row reads as the name
+      // staff last saw on the tile. Chosen by comparing the orders'
+      // instants (tie-broken by order number) rather than by which line
+      // happened to be visited first, so the answer doesn't depend on the
+      // caller's iteration order — `ordersForDay` hands them over
+      // newest-first, but nothing here relies on that. Only the *name* is
+      // picked this way; units and revenue always come from each line's
+      // own snapshot price, so a rename can never move money.
+      const newerName =
+        existing === undefined || at > existing.nameAt
+          ? true
+          : at === existing.nameAt && order.number > existing.nameNumber
       products.set(line.productId, {
         productId: line.productId,
-        // Keep the first snapshot name seen for this product, so a later
-        // rename mid-day doesn't retitle the earlier sales.
-        name: existing?.name ?? line.name,
+        name: newerName ? line.name : (existing?.name ?? line.name),
         units,
         revenue,
+        nameAt: newerName ? at : (existing?.nameAt ?? at),
+        nameNumber: newerName ? order.number : (existing?.nameNumber ?? order.number),
       })
     }
 
     if (mismatched) report.mismatchedTotalCount++
   }
 
-  report.products = [...products.values()].sort(
-    (a, b) =>
-      b.revenue - a.revenue ||
-      b.units - a.units ||
-      a.name.localeCompare(b.name) ||
-      a.productId.localeCompare(b.productId),
-  )
+  report.products = [...products.values()]
+    .map(({ productId, name, units, revenue }) => ({ productId, name, units, revenue }))
+    .sort(
+      (a, b) =>
+        b.revenue - a.revenue ||
+        b.units - a.units ||
+        a.name.localeCompare(b.name) ||
+        a.productId.localeCompare(b.productId),
+    )
   return report
 }
 

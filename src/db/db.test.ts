@@ -91,8 +91,12 @@ async function seedV1(name: string): Promise<void> {
   expect(v1.verno).toBe(1)
   await v1.table('products').bulkAdd(v1Products)
   await v1.table('orders').bulkAdd(v1Orders)
-  // Mandatory: an open connection on the old version blocks the v2 upgrade,
-  // and `PosDatabase.open()` below would hang instead of upgrading.
+  // Closed before the upgrade, the way an app that has finished with a
+  // connection should. Not strictly required — IndexedDB asks a blocking
+  // connection to stand down via `versionchange`, and Dexie closes itself
+  // when it gets that (proven by the last test in this file) — but an
+  // explicit close keeps these tests testing the migration rather than
+  // the blocking protocol.
   v1.close()
 }
 
@@ -179,6 +183,37 @@ describe('PosDatabase schema v1 -> v2', () => {
     }
     await saveSettings(saved, database)
     await expect(getSettings(database)).resolves.toEqual(saved)
+    database.close()
+  })
+})
+
+describe('PosDatabase upgrading around a still-open v1 connection', () => {
+  it('does not hang: the blocking v1 connection is auto-closed on versionchange', async () => {
+    const name = `test-${Math.random()}`
+    const v1 = openV1(name)
+    await v1.open()
+    expect(v1.verno).toBe(1)
+    await v1.table('orders').bulkAdd(v1Orders)
+    // Deliberately NOT closed — this is the real-world case of a second
+    // tab, or a reload racing its predecessor's teardown.
+
+    const database = new PosDatabase(name)
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error('v2 open was blocked by the v1 connection')), 5000)
+    })
+    try {
+      // A race, not a bare await: a genuinely blocked upgrade would
+      // otherwise sit here until the whole test file timed out, with
+      // nothing to say why.
+      await Promise.race([database.open(), timeout])
+    } finally {
+      clearTimeout(timer)
+    }
+
+    expect(database.verno).toBe(2)
+    expect(await database.orders.count()).toBe(v1Orders.length)
+    v1.close()
     database.close()
   })
 })

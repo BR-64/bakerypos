@@ -21,7 +21,11 @@ import { db, type PosDatabase } from './db'
 export async function getSettings(database: PosDatabase = db): Promise<Settings> {
   try {
     const row = await database.settings.get(SETTINGS_ID)
-    if (row === undefined) return DEFAULT_SETTINGS
+    // A fresh copy, never the shared `DEFAULT_SETTINGS` object: task 7b's
+    // Admin form holds whatever this returns as its edit target, and
+    // mutating the module-level default would poison every later
+    // fallback for the lifetime of the page.
+    if (row === undefined) return { ...DEFAULT_SETTINGS }
     return coerceSettings(row)
   } catch (error) {
     // `safeString` (not `String(error)`) for the non-Error case: whatever
@@ -29,7 +33,7 @@ export async function getSettings(database: PosDatabase = db): Promise<Settings>
     // message must not be what finally throws.
     const message = error instanceof Error ? error.message : safeString(error)
     console.error(`getSettings: using defaults, the settings read failed — ${message}`)
-    return DEFAULT_SETTINGS
+    return { ...DEFAULT_SETTINGS }
   }
 }
 

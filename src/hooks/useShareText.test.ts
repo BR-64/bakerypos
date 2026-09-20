@@ -148,22 +148,6 @@ describe('useShareText — neither API', () => {
     expect(result.current.copied).toBe(false)
   })
 
-  it('reset clears the fallback and the copied flag', async () => {
-    installNavigatorApi('share', undefined)
-    installNavigatorApi('clipboard', undefined)
-
-    const { result } = renderHook(() => useShareText())
-    await act(async () => {
-      result.current.share(TEXT)
-    })
-    expect(result.current.fallbackText).toBe(TEXT)
-
-    act(() => result.current.reset())
-
-    expect(result.current.fallbackText).toBeNull()
-    expect(result.current.copied).toBe(false)
-  })
-
   it('clears a previous result at the start of the next share', async () => {
     installNavigatorApi('share', undefined)
     installNavigatorApi('clipboard', undefined)

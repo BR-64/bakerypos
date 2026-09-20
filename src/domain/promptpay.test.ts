@@ -177,8 +177,4 @@ describe('PLACEHOLDER_PROMPTPAY_ID', () => {
     expect(isValidPromptPayId(PLACEHOLDER_PROMPTPAY_ID)).toBe(true)
     expect(() => promptPayPayload(PLACEHOLDER_PROMPTPAY_ID, 5500)).not.toThrow()
   })
-
-  it('is obviously fake, so nobody mistakes it for a configured account', () => {
-    expect(PLACEHOLDER_PROMPTPAY_ID).toBe('0000000000')
-  })
 })

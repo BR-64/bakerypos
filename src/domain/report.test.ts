@@ -154,13 +154,70 @@ describe('buildZReport — per product', () => {
     ])
   })
 
-  it('keeps the first snapshot name when a product was renamed mid-day', () => {
-    const orders = [
-      makeOrder({ lines: [{ ...croissant, name: 'Croissant' }] }),
-      makeOrder({ lines: [{ ...croissant, name: 'Butter Croissant' }] }),
-    ]
+  it('titles a renamed product with its most recent snapshot name', () => {
+    const morning = makeOrder({
+      createdAt: new Date(2026, 0, 15, 8, 0).toISOString(),
+      lines: [{ ...croissant, name: 'Croissant' }],
+    })
+    const afternoon = makeOrder({
+      createdAt: new Date(2026, 0, 15, 15, 0).toISOString(),
+      lines: [{ ...croissant, name: 'Butter Croissant' }],
+    })
 
-    expect(buildZReport(orders, day).products[0].name).toBe('Croissant')
+    // `ordersForDay` hands orders over newest-first, which is how the
+    // screen always calls this.
+    expect(buildZReport([afternoon, morning], day).products).toEqual([
+      { productId: 'p-croissant', name: 'Butter Croissant', units: 2, revenue: 11000 },
+    ])
+  })
+
+  it('picks that name from the instants, not from the caller iteration order', () => {
+    const morning = makeOrder({
+      createdAt: new Date(2026, 0, 15, 8, 0).toISOString(),
+      lines: [{ ...croissant, name: 'Croissant' }],
+    })
+    const afternoon = makeOrder({
+      createdAt: new Date(2026, 0, 15, 15, 0).toISOString(),
+      lines: [{ ...croissant, name: 'Butter Croissant' }],
+    })
+
+    // Same two orders, oldest-first: the answer must not change.
+    expect(buildZReport([morning, afternoon], day).products).toEqual(
+      buildZReport([afternoon, morning], day).products,
+    )
+    expect(buildZReport([morning, afternoon], day).products[0].name).toBe('Butter Croissant')
+  })
+
+  it('breaks a same-instant rename tie by order number, the later sale winning', () => {
+    const sameInstant = new Date(2026, 0, 15, 8, 0).toISOString()
+    const first = makeOrder({
+      number: 1,
+      createdAt: sameInstant,
+      lines: [{ ...croissant, name: 'Croissant' }],
+    })
+    const second = makeOrder({
+      number: 2,
+      createdAt: sameInstant,
+      lines: [{ ...croissant, name: 'Butter Croissant' }],
+    })
+
+    expect(buildZReport([second, first], day).products[0].name).toBe('Butter Croissant')
+    expect(buildZReport([first, second], day).products[0].name).toBe('Butter Croissant')
+  })
+
+  it('never lets a rename move money: units and revenue use each line own price', () => {
+    const morning = makeOrder({
+      createdAt: new Date(2026, 0, 15, 8, 0).toISOString(),
+      lines: [{ ...croissant, name: 'Croissant', unitPrice: 5000 }],
+    })
+    const afternoon = makeOrder({
+      createdAt: new Date(2026, 0, 15, 15, 0).toISOString(),
+      lines: [{ ...croissant, name: 'Butter Croissant', unitPrice: 6000 }],
+    })
+
+    expect(buildZReport([afternoon, morning], day).products).toEqual([
+      { productId: 'p-croissant', name: 'Butter Croissant', units: 2, revenue: 11000 },
+    ])
   })
 
   it('sorts by revenue, busiest first', () => {
@@ -302,6 +359,36 @@ describe('buildZReport — corrupt data never throws', () => {
     expect(report.total).toBe(huge)
     expect(Number.isSafeInteger(report.total)).toBe(true)
     expect(report.invalidCount).toBe(1)
+  })
+
+  it('guards per-product revenue independently of the order-total guard', () => {
+    // Each order's stored total is a harmless ฿1, so the running order
+    // total never trips its own guard — but the lines claim a price just
+    // under MAX_SAFE_INTEGER, so the *second* one would push this
+    // product's accumulated revenue past exact-integer range.
+    const absurd = { productId: 'p-absurd', name: 'Absurd', unitPrice: 9007199254740981, qty: 1 }
+    const orders = [
+      makeOrder({ lines: [absurd], total: 100, payment: cash(100, 0) }),
+      makeOrder({ lines: [absurd], total: 100, payment: cash(100, 0) }),
+    ]
+
+    const report = buildZReport(orders, day)
+
+    expect(report.orderCount).toBe(2)
+    expect(report.total).toBe(200)
+    expect(report.cashTotal).toBe(200)
+    // Both orders' lines disagree with their stored total, and the second
+    // also loses its line to the revenue guard.
+    expect(report.mismatchedTotalCount).toBe(2)
+    for (const product of report.products) {
+      expect(Number.isSafeInteger(product.revenue)).toBe(true)
+      expect(Number.isSafeInteger(product.units)).toBe(true)
+    }
+    // The first line still counts; the second is dropped rather than
+    // silently turned into an inexact number.
+    expect(report.products).toEqual([
+      { productId: 'p-absurd', name: 'Absurd', units: 1, revenue: 9007199254740981 },
+    ])
   })
 
   it('never throws for a non-array or an unusable day', () => {

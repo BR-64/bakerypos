@@ -12,6 +12,10 @@ let database: PosDatabase
 beforeEach(async () => {
   database = new PosDatabase(`test-${Math.random()}`)
   await database.open()
+  now = new Date()
+  todayKey = localDayKey(at(0, 12))
+  yesterdayKey = localDayKey(at(1, 12))
+  tomorrowKey = localDayKey(at(-1, 12))
 })
 
 // Every navigator stub below is an own property; deleting it leaves the
@@ -35,14 +39,18 @@ const settings: Settings = {
 const croissant: CartLine = { productId: 'p-croissant', name: 'Croissant', unitPrice: 5500, qty: 1 }
 const baguette: CartLine = { productId: 'p-baguette', name: 'Baguette', unitPrice: 6000, qty: 1 }
 
-const now = new Date()
-/** A local instant on the day `daysAgo` days back from today. */
+// Captured per test, never once at import: a run that crosses local
+// midnight between module load and the assertions would otherwise compare
+// today's rendered date against yesterday's key.
+let now: Date
+let todayKey: string
+let yesterdayKey: string
+let tomorrowKey: string
+
+/** A local instant on the day `daysAgo` days back from `now`. */
 function at(daysAgo: number, hour: number): Date {
   return new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysAgo, hour, 0)
 }
-
-const todayKey = localDayKey(at(0, 12))
-const yesterdayKey = localDayKey(at(1, 12))
 
 let nextNumber = 1
 
@@ -171,6 +179,42 @@ describe('ReportScreen', () => {
   it('never lets today be exceeded on the picker', () => {
     renderScreen()
     expect(screen.getByLabelText('Day')).toHaveAttribute('max', todayKey)
+  })
+
+  it('says "Pick a day." — without crashing — when the date input is cleared', async () => {
+    await database.orders.add(
+      makeOrder({ createdAt: at(0, 9).toISOString(), lines: [croissant], total: 5500 }),
+    )
+
+    renderScreen()
+    const input = screen.getByLabelText('Day') as HTMLInputElement
+    await waitFor(() => expect(summaryValue('Total')).toBe('฿55'))
+
+    // Browsers hand back '' for an emptied date field, which is not a day.
+    fireEvent.change(input, { target: { value: '' } })
+
+    expect(await screen.findByText('Pick a day.')).toBeInTheDocument()
+    expect(summaryValue('Total')).toBeNull()
+    expect(screen.queryByText(/something went wrong/i)).not.toBeInTheDocument()
+
+    // …and picking a real day again recovers.
+    fireEvent.change(input, { target: { value: todayKey } })
+    await waitFor(() => expect(summaryValue('Total')).toBe('฿55'))
+  })
+
+  it('queries cleanly for a day past `max`, which some browsers still allow typing', async () => {
+    await database.orders.add(
+      makeOrder({ createdAt: at(0, 9).toISOString(), lines: [croissant], total: 5500 }),
+    )
+
+    renderScreen()
+    const input = screen.getByLabelText('Day') as HTMLInputElement
+    await waitFor(() => expect(summaryValue('Total')).toBe('฿55'))
+
+    fireEvent.change(input, { target: { value: tomorrowKey } })
+
+    expect(await screen.findByText('No sales on this day.')).toBeInTheDocument()
+    expect(screen.queryByText(/something went wrong/i)).not.toBeInTheDocument()
   })
 
   it('keeps the picker usable while the settings read is still in flight, with Share disabled', async () => {
