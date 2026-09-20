@@ -52,6 +52,26 @@ describe('useTapShield', () => {
     expect(result.current.active).toBe(false)
   })
 
+  it('memoizes its return value: same reference across a re-render with no state change', () => {
+    const { result, rerender } = renderHook(() => useTapShield())
+    const first = result.current
+    rerender()
+    expect(result.current).toBe(first)
+  })
+
+  it('returns a new reference only when `active` itself changes', () => {
+    const { result } = renderHook(() => useTapShield())
+    const beforeRaise = result.current
+
+    act(() => result.current.raise())
+    const afterRaise = result.current
+    expect(afterRaise).not.toBe(beforeRaise)
+    expect(afterRaise.raise).toBe(beforeRaise.raise)
+
+    act(() => vi.advanceTimersByTime(TAP_SHIELD_MS))
+    expect(result.current).not.toBe(afterRaise)
+  })
+
   it('leaves no timer running after unmount', () => {
     const clearSpy = vi.spyOn(globalThis, 'clearTimeout')
     const { result, unmount } = renderHook(() => useTapShield())

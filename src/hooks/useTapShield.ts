@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 /** How long a raised shield blocks taps for. */
 export const TAP_SHIELD_MS = 400
@@ -25,6 +25,13 @@ export interface TapShield {
  * same physical tap (or one immediately following it, before the finger has
  * lifted) can land on a product tile now sitting where "Done" used to be,
  * silently starting a new sale nobody rang up.
+ *
+ * Note for testing: jsdom does not synthesize a `click` event from an
+ * Enter/Space `keydown` the way a real browser does for a focused button,
+ * so keyboard activation can't be exercised directly in these tests — but
+ * a real browser's synthesized click is still caught by the same
+ * `onClickCapture` guard, since it dispatches the same `click` event a
+ * pointer tap would.
  */
 export function useTapShield(): TapShield {
   const [active, setActive] = useState(false)
@@ -46,5 +53,10 @@ export function useTapShield(): TapShield {
     }
   }, [])
 
-  return { active, raise }
+  // Memoized so the returned object's identity only changes when `active`
+  // actually does (`raise` is already stable) — otherwise a consumer like
+  // `App`, which depends on the whole returned object from a `useCallback`,
+  // would get a new reference (and so recreate that callback) on every
+  // render, not just the ones where the shield's state changed.
+  return useMemo(() => ({ active, raise }), [active, raise])
 }

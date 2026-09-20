@@ -83,6 +83,12 @@ export default function App({ database = db }: { database?: PosDatabase }) {
       setCompletedOrder(order)
       setScreen(HOME_SCREEN)
     },
+    // `useTapShield`'s return value is itself memoized (stable unless
+    // `active` changes), so depending on the whole `shield` object here —
+    // rather than reaching into it for `shield.raise`, which oxlint's
+    // exhaustive-deps check doesn't recognize as a valid dependency entry —
+    // still only recreates this callback on the rare renders where `active`
+    // actually flips, not on every unrelated render.
     [clear, shield],
   )
   const dismissOrderToast = useCallback(() => setCompletedOrder(null), [])
@@ -93,14 +99,21 @@ export default function App({ database = db }: { database?: PosDatabase }) {
   // anything inside `.screen-wrap` (the tile's own onClick, CartBar's
   // onOpen, …) — the toast and the bottom nav are siblings of this wrapper,
   // outside it entirely, so they're untouched and stay tappable throughout.
+  //
+  // Guarded to Sell (`HOME_SCREEN`) only: the shield exists solely to stop a
+  // stray tap landing on a product tile that's just replaced the checkout
+  // screen's last button — a screen navigated to *during* the window (e.g.
+  // tapping Orders right after a sale, then a row) was a deliberate tap on
+  // a different screen the person chose to visit, not a residual tap from
+  // the sale, and must never be eaten.
   const guardWhileShielded = useCallback(
     (event: SyntheticEvent) => {
-      if (shield.active) {
+      if (shield.active && screen === HOME_SCREEN) {
         event.preventDefault()
         event.stopPropagation()
       }
     },
-    [shield.active],
+    [shield.active, screen],
   )
 
   const Entry = screens[screen]
