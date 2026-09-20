@@ -204,6 +204,24 @@ function makeOrder(overrides: Partial<Order> = {}): Order {
   }
 }
 
+/**
+ * Re-expresses `d` as an ISO-8601-*ish* string with an explicit `offsetHours`
+ * numeric offset instead of a trailing `Z`, denoting the exact same instant
+ * as `d` — standard ISO 8601 offset semantics are `wall_clock = UTC + offset`,
+ * so the wall-clock fields printed here are `d`'s UTC fields shifted by
+ * `offsetHours`. Used only to construct test data `completeOrder` itself
+ * would never produce (it always writes `Z`), for `todaysOrders`'s
+ * documented blind spot around non-`Z` timestamps.
+ */
+function isoWithOffset(d: Date, offsetHours: number): string {
+  const shifted = new Date(d.getTime() + offsetHours * 3600_000)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const sign = offsetHours >= 0 ? '+' : '-'
+  const datePart = `${shifted.getUTCFullYear()}-${pad(shifted.getUTCMonth() + 1)}-${pad(shifted.getUTCDate())}`
+  const timePart = `${pad(shifted.getUTCHours())}:${pad(shifted.getUTCMinutes())}:${pad(shifted.getUTCSeconds())}.${String(shifted.getUTCMilliseconds()).padStart(3, '0')}`
+  return `${datePart}T${timePart}${sign}${pad(Math.abs(offsetHours))}:00`
+}
+
 describe('todaysOrders', () => {
   // Jan 15, 2026, 10:00 local — the reference "now" most tests pass in.
   const now = new Date(2026, 0, 15, 10, 0)
@@ -258,7 +276,28 @@ describe('todaysOrders', () => {
     await expect(todaysOrders(database, now)).resolves.toEqual([])
   })
 
-  it('excludes voided orders from neither day nor status — voided orders still appear', async () => {
+  it('documented limitation: an order whose createdAt uses a non-Z numeric offset is invisible, even for the same instant as one that would be included', async () => {
+    // `now` itself, Z-normalized, is already proven (elsewhere in this
+    // describe block) to fall inside today's range — it's what every other
+    // "inside today" test in this file anchors to.
+    const zForm = now.toISOString()
+    await database.orders.add(makeOrder({ id: 'o-z', number: 1, createdAt: zForm }))
+
+    // The exact same instant, re-expressed with an explicit -12:00 offset
+    // instead of Z — still a perfectly parseable ISO instant (`isValidOrder`
+    // would accept it) representing the identical moment, but no longer
+    // sorting as a *string* inside [startISO, endISO), which are both
+    // Z-normalized. This isn't rejected by some validity check — the row is
+    // invisible to the indexed range scan itself, so `todaysOrders` never
+    // sees it at all, and there's nothing to log.
+    const offsetForm = isoWithOffset(now, -12)
+    await database.orders.add(makeOrder({ id: 'o-offset', number: 2, createdAt: offsetForm }))
+
+    const result = await todaysOrders(database, now)
+    expect(result.map((o) => o.id)).toEqual(['o-z'])
+  })
+
+  it('includes voided orders (todaysOrders is not filtered by status)', async () => {
     const voided = makeOrder({
       id: 'o-voided',
       number: 1,
