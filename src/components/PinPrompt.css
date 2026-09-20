@@ -1,0 +1,137 @@
+/* The PIN keypad that guards Admin and Void. Every key is well over the
+   48px minimum touch target — this is typed one-handed at a counter. */
+
+.pin-prompt {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  max-width: 340px;
+  margin: 0 auto;
+  padding: 16px 0 24px;
+}
+
+.pin-prompt-heading {
+  margin: 0;
+  font-size: 1.1rem;
+  text-align: center;
+}
+
+.pin-prompt-message {
+  margin: 0;
+  text-align: center;
+}
+
+.pin-prompt-message[role='alert'] {
+  padding: 12px 16px;
+  border: 2px solid #b3261e;
+  border-radius: 8px;
+  background: #fdecea;
+  color: #b3261e;
+  font-weight: 600;
+}
+
+/* Masked entry: one dot per digit, never the digits themselves. */
+.pin-prompt-dots {
+  min-height: 40px;
+  margin: 0;
+  font-size: 2rem;
+  line-height: 40px;
+  letter-spacing: 0.35em;
+  text-align: center;
+  color: var(--accent);
+}
+
+.pin-prompt-keypad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.pin-prompt-key {
+  min-height: 64px;
+  min-width: var(--tap);
+  border: none;
+  border-radius: 12px;
+  background: var(--tile);
+  color: inherit;
+  font: inherit;
+  font-size: 1.5rem;
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.1);
+  touch-action: manipulation;
+}
+
+.pin-prompt-key-delete {
+  font-size: 1rem;
+}
+
+.pin-prompt-key:disabled {
+  opacity: 0.5;
+  box-shadow: none;
+}
+
+.pin-prompt-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.pin-prompt-submit,
+.pin-prompt-cancel,
+.pin-prompt-forgot {
+  min-height: var(--tap);
+  flex: 1;
+  padding: 0 16px;
+  border-radius: 8px;
+  font: inherit;
+  font-weight: 600;
+  touch-action: manipulation;
+}
+
+.pin-prompt-submit {
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  font-size: 1.1rem;
+}
+
+.pin-prompt-submit:disabled {
+  background: var(--muted);
+}
+
+.pin-prompt-cancel,
+.pin-prompt-forgot {
+  border: 2px solid var(--accent);
+  background: transparent;
+  color: var(--accent);
+}
+
+.pin-prompt-recovery-input {
+  min-height: var(--tap);
+  padding: 0 12px;
+  border: 2px solid var(--accent);
+  border-radius: 8px;
+  background: var(--tile);
+  color: inherit;
+  font: inherit;
+  text-align: center;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* Shown once, then never again — it has to be readable enough to copy
+   onto paper in one go, so selection is re-enabled here (index.css turns
+   it off for the whole app). */
+.pin-prompt-recovery-code {
+  margin: 0;
+  padding: 16px 8px;
+  border: 2px dashed var(--accent);
+  border-radius: 12px;
+  background: var(--tile);
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-align: center;
+  -webkit-user-select: text;
+  user-select: text;
+}
