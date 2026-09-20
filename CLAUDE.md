@@ -51,6 +51,7 @@ required for a sale to complete.
 - Booleans are not indexable in IndexedDB — filter `archived` / `outOfStock` in JS.
 - Named exports, function components, no default exports except `App`.
 - Conventional commits (`feat:`, `fix:`, `test:`, `docs:`, `chore:`). One task per branch/PR.
+- Run test, typecheck, lint and build as separate commands, never chained with && in one call, so a failure is never hidden.
 
 ## Definition of done for any task
 
