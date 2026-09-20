@@ -170,8 +170,13 @@ export default function App({ database = db }: { database?: PosDatabase }) {
         {/* First run in a browser tab only: "Add to Home screen", until
             it's dismissed. In the normal flow above the screen, never
             floating over it — nothing may end up covering the cart bar,
-            a pay button or the nav. It renders nothing once installed. */}
-        <InstallHint />
+            a pay button or the nav. It renders nothing once installed.
+
+            Gated on `showNav` for the same reason the nav itself is: on
+            cart/cash/promptpay nothing may compete with the pay buttons,
+            and ~85px of banner at the top of a short phone is enough to
+            push the bottom of the Cash keypad below the fold. */}
+        {showNav && <InstallHint />}
         <div
           className="screen-wrap"
           onClickCapture={guardWhileShielded}

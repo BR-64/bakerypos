@@ -30,6 +30,9 @@ tunnel, a local certificate, or USB port-forwarding to `localhost` on the phone.
 
 - [ ] In a browser tab, the "Add this to your Home screen" hint appears at the top, above the
       product grid. It covers nothing: the cart bar, the nav and every tile are still tappable.
+- [ ] With the hint still showing (before dismissing it), ring something up and open **Cash**:
+      the hint is not there, and the whole keypad and the "Done" button are reachable without
+      scrolling. Same for PromptPay: the QR and both buttons fit.
 - [ ] "Got it" dismisses it, and it is still gone after a reload.
 - [ ] Add to Home screen. The icon on the home screen is the bakery loaf — not a screenshot of
       the page, not a grey globe — and it is not clipped or letterboxed inside the launcher's
@@ -38,6 +41,16 @@ tunnel, a local certificate, or USB port-forwarding to `localhost` on the phone.
       and the install hint is **not** shown.
 - [ ] Pinch-zoom does nothing; pulling down at the top of the grid does not reload the page.
 - [ ] Force-quit and relaunch: the app opens on Sell, and the products are still there.
+
+## 1b. Lighthouse
+
+Desktop Chrome against the same `npm run preview` build (DevTools → Lighthouse → Progressive
+Web App, or `npx lighthouse <url> --only-categories=pwa`). It is a build check, not a phone
+check, but it catches a broken manifest or service worker before anyone walks a phone over.
+
+- [ ] **Installable**: the manifest, the 192 and 512 icons and the service worker all pass.
+- [ ] **`start_url` responds with a 200 when offline.**
+- [ ] Record anything it flags here, with the audit name: \_\_\_\_\_\_\_\_
 
 ## 2. A cash sale in airplane mode
 

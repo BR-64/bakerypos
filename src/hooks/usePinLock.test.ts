@@ -241,6 +241,44 @@ describe('usePinLock — the lockout that survives a force-quit', () => {
     expect(result.current.lockoutMsLeft).toBe(0)
   })
 
+  it('scrubs a stored deadline it is already ignoring, so winding the clock back cannot revive it', async () => {
+    // Ignored today (further off than one lockout), but still in the row —
+    // and a device clock wound forward would bring it back into range.
+    const stale = Date.now() + 10 * 24 * 3600_000
+    await saveSettings({ ...DEFAULT_SETTINGS, lockedUntil: stale }, database)
+    const { result } = renderHook(() => usePinLock({ database, storedLockedUntil: stale }))
+    expect(result.current.lockoutMsLeft).toBe(0)
+
+    act(() => result.current.unlock())
+
+    await vi.waitFor(async () => {
+      expect((await getSettings(database)).lockedUntil).toBeNull()
+    })
+  })
+
+  it('keeps the lockout on screen even when storing it fails', async () => {
+    await saveSettings({ ...DEFAULT_SETTINGS }, database)
+    const put = vi
+      .spyOn(database.settings, 'put')
+      .mockRejectedValue(new Error('the disk is full') as never)
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { result } = renderHook(() => usePinLock({ database }))
+
+    for (let i = 0; i < MAX_PIN_ATTEMPTS; i += 1) {
+      act(() => result.current.registerFailure())
+    }
+
+    // The write is what fails, not the lockout: this session still holds
+    // the keypad shut for its 60 seconds, and the failure is logged rather
+    // than thrown out of the tap handler.
+    expect(result.current.lockoutMsLeft).toBeGreaterThan(PIN_LOCKOUT_MS - 1000)
+    await vi.waitFor(() => {
+      expect(logged).toHaveBeenCalledWith(expect.stringContaining("couldn't store the lockout"))
+    })
+    put.mockRestore()
+    logged.mockRestore()
+  })
+
   it('does not write anything when the keypad is merely unlocked normally', async () => {
     await saveSettings({ ...DEFAULT_SETTINGS }, database)
     const put = vi.spyOn(database.settings, 'put')

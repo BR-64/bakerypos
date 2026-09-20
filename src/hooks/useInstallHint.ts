@@ -22,9 +22,9 @@ const INSTALLED_DISPLAY_MODES = ['standalone', 'minimal-ui', 'fullscreen'] as co
  * hint shown once too often rather than one that can never be shown.
  */
 export function isInstalledDisplay(): boolean {
-  const iosFlag: unknown = (navigator as { standalone?: unknown }).standalone
-  if (iosFlag === true) return true
   try {
+    const iosFlag: unknown = (navigator as { standalone?: unknown }).standalone
+    if (iosFlag === true) return true
     if (typeof window.matchMedia !== 'function') return false
     return INSTALLED_DISPLAY_MODES.some(
       (mode) => window.matchMedia(`(display-mode: ${mode})`).matches === true,

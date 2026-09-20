@@ -467,6 +467,10 @@ body,
 
 .bottom-nav-button {
   flex: 1;
+  /* Without this the buttons refuse to shrink below their text's width
+     (min-width: auto), so at enlarged system text — with the offline
+     badge alongside — the nav would overflow sideways instead. */
+  min-width: 0;
   min-height: var(--tap);
   border: none;
   background: transparent;
@@ -518,9 +522,12 @@ body,
 }
 
 /* Offline badge, inside the nav bar (see OfflineIndicator.tsx). Empty and
-   zero-width while online, so the four nav buttons keep the full width and
-   nothing shifts when the connection comes and goes. Not tappable — it is
-   a status, not a control, so the 48px rule doesn't apply to it. */
+   zero-width while online, so the four nav buttons keep the full width;
+   while offline it takes about 77px of the nav's width, and the buttons
+   (flex: 1, min-width: 0) give it up rather than overflowing. The nav's
+   height never changes either way, so nothing below it moves when the
+   connection comes and goes. Not tappable — it is a status, not a
+   control, so the 48px rule doesn't apply to it. */
 .offline-indicator {
   flex: 0 0 auto;
   display: flex;

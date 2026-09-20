@@ -155,8 +155,14 @@ export function usePinLock({
     // session inherited from the settings row — so ignore that one from
     // here on, and clear it on disk too.
     setStoredCleared(true)
-    if (lockedUntil !== null) persist(null)
-  }, [lockedUntil, persist])
+    // Note `storedLockedUntil`, not just the lockout in force: a stored
+    // deadline that `usableLockoutDeadline` currently rejects (it has
+    // passed, or the device clock has moved) is still sitting in the row,
+    // and winding the clock back would bring it into range again. This is
+    // the one moment we know the person is entitled to be here, so it is
+    // the moment to scrub it.
+    if (lockedUntil !== null || storedLockedUntil !== null) persist(null)
+  }, [lockedUntil, storedLockedUntil, persist])
 
   const lock = useCallback(() => setUnlockedUntil(null), [])
 
