@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { PosDatabase } from './db/db'
@@ -24,6 +24,10 @@ beforeEach(async () => {
 
 afterEach(() => {
   vi.restoreAllMocks()
+  // Only the "second consecutive PromptPay sale" test below enables fake
+  // timers; restoring real ones unconditionally here is a no-op otherwise
+  // and keeps that test from ever leaking fake timers into the next one.
+  vi.useRealTimers()
 })
 
 async function addCroissantAndOpenPromptPay() {
@@ -74,6 +78,18 @@ describe('App — PromptPay checkout', () => {
   })
 
   it('a second consecutive PromptPay sale shows "Order #2 — paid" with 2 orders stored', async () => {
+    // Task 6's tap shield (src/hooks/useTapShield.ts) briefly blocks taps
+    // right after a sale so a stray tap from the same gesture can't start a
+    // new one — see src/App.shield.test.tsx, which documents this exact
+    // fake-timer setup (`shouldAdvanceTime: true` keeps Dexie's own
+    // internal `setTimeout(fn, 0)` scheduling resolving). On a real phone,
+    // the time a cashier takes to add the next item dwarfs the shield's
+    // window; here the two sales happen back-to-back, so this fast-forwards
+    // past it instead of a real 400ms sleep. Fake timers must be enabled
+    // before the first sale completes — the shield's own timer is created
+    // then, and only a fake one is something `advanceTimersByTime` controls.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'], shouldAdvanceTime: true })
+
     render(<App database={database} />)
     await addCroissantAndOpenPromptPay()
     fireEvent.click(screen.getByRole('button', { name: 'Paid — done' }))
@@ -81,12 +97,9 @@ describe('App — PromptPay checkout', () => {
       expect(screen.getByRole('status')).toHaveTextContent('Order #1 — paid')
     })
 
-    // Task 6's tap shield (src/hooks/useTapShield.ts) briefly blocks taps
-    // right after a sale so a stray tap from the same gesture can't start a
-    // new one — see src/App.shield.test.tsx. On a real phone, the time a
-    // cashier takes to add the next item dwarfs this; here the two sales
-    // happen back-to-back, so this waits the shield out first.
-    await new Promise((resolve) => setTimeout(resolve, TAP_SHIELD_MS))
+    act(() => {
+      vi.advanceTimersByTime(TAP_SHIELD_MS)
+    })
 
     await addCroissantAndOpenPromptPay()
     fireEvent.click(screen.getByRole('button', { name: 'Paid — done' }))
