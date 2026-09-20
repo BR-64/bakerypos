@@ -102,6 +102,14 @@ export function PinPrompt({
     return (
       <section className="pin-prompt" aria-label={`${purpose} locked`}>
         <p className="pin-prompt-message muted">Checking the PIN…</p>
+        {/* Same way out as the failed-read branch: the Void panel opens
+            this inline, and a slow settings read must not strand someone
+            in a prompt with nothing to tap. */}
+        {onCancel && (
+          <button type="button" className="pin-prompt-cancel" onClick={onCancel}>
+            Cancel
+          </button>
+        )}
       </section>
     )
   }
@@ -223,6 +231,21 @@ export function PinPrompt({
     setEntry((current) => current.slice(0, -1))
   }
 
+  // The lockout notice belongs to every view that can be locked out, not
+  // just the keypad: "Forgot the PIN?" leads to the recovery view, where a
+  // disabled input with no explanation would look broken rather than
+  // locked. It takes precedence over `message`, which is about the last
+  // attempt rather than about why nothing responds now.
+  const notice = lockedOut ? (
+    <p className="pin-prompt-message" role="alert">
+      Too many wrong tries. Try again in {Math.ceil(lock.lockoutMsLeft / 1000)}s.
+    </p>
+  ) : message !== null ? (
+    <p className="pin-prompt-message" role="alert">
+      {message}
+    </p>
+  ) : null
+
   if (currentStep === 'show-recovery' && recoveryCode !== null) {
     return (
       <section className="pin-prompt" aria-label="Recovery code">
@@ -251,11 +274,7 @@ export function PinPrompt({
     return (
       <section className="pin-prompt" aria-label="Reset the PIN">
         <h2 className="pin-prompt-heading">Enter the recovery code</h2>
-        {message && (
-          <p className="pin-prompt-message" role="alert">
-            {message}
-          </p>
-        )}
+        {notice}
         <input
           type="text"
           className="pin-prompt-recovery-input"
@@ -315,17 +334,7 @@ export function PinPrompt({
         {'●'.repeat(entry.length) || '–'}
       </p>
 
-      {lockedOut ? (
-        <p className="pin-prompt-message" role="alert">
-          Too many wrong tries. Try again in {Math.ceil(lock.lockoutMsLeft / 1000)}s.
-        </p>
-      ) : (
-        message && (
-          <p className="pin-prompt-message" role="alert">
-            {message}
-          </p>
-        )
-      )}
+      {notice}
 
       <div className="pin-prompt-keypad">
         {KEYS.map((key) => (
@@ -369,7 +378,10 @@ export function PinPrompt({
         <button
           type="button"
           className="pin-prompt-forgot"
-          disabled={busy}
+          // Disabled during a lockout as well: the recovery view can't be
+          // used while locked out either, and walking into it would just
+          // look broken.
+          disabled={busy || lockedOut}
           onClick={() => {
             setEntry('')
             setMessage(null)

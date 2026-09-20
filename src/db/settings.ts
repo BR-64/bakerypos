@@ -44,7 +44,7 @@ export async function readSettings(database: PosDatabase = db): Promise<Settings
     // a rejected IndexedDB read hands back is untrusted, and building this
     // message must not be what finally throws.
     const message = error instanceof Error ? error.message : safeString(error)
-    console.error(`getSettings: using defaults, the settings read failed — ${message}`)
+    console.error(`readSettings: using defaults, the settings read failed — ${message}`)
     return { settings: coerceSettings(undefined), failed: true }
   }
 }
@@ -102,14 +102,25 @@ export async function saveSettings(
  * patch into `DEFAULT_SETTINGS` and storing that would silently replace a
  * real shop's settings, and un-set their PIN, on the strength of a failed
  * read. The caller shows the rejection and keeps the form usable.
+ *
+ * The read-modify-write runs inside one `rw` transaction, because it is
+ * otherwise a lost-update race between two controls with independent
+ * in-flight flags: the owner corrects the PromptPay ID, taps "Save shop
+ * settings", then taps "Move Drinks up" before the first resolves — both
+ * reads see the old row, the reorder's `put` lands last, and the corrected
+ * PromptPay ID is written back to the old account. Serialising them means
+ * the second read sees the first write. Everything inside is Dexie-only,
+ * so it nests cleanly inside any caller's transaction too.
  */
 export async function updateSettings(
   patch: Partial<Omit<Settings, 'id'>>,
   database: PosDatabase = db,
 ): Promise<Settings> {
-  const current = await readSettings(database)
-  if (current.failed) {
-    throw new Error("Couldn't read the current settings, so nothing was changed.")
-  }
-  return saveSettings({ ...current.settings, ...patch }, database)
+  return database.transaction('rw', database.settings, async () => {
+    const current = await readSettings(database)
+    if (current.failed) {
+      throw new Error("Couldn't read the current settings, so nothing was changed.")
+    }
+    return saveSettings({ ...current.settings, ...patch }, database)
+  })
 }

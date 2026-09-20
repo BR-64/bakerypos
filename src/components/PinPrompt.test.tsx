@@ -159,6 +159,24 @@ describe('PinPrompt — entering a stored PIN', () => {
     expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled()
   })
 
+  it('closes the recovery route during a lockout instead of leading to a dead view', async () => {
+    const settings = await storedSettingsWithPin('4821')
+    const lock = stubLock({ lockoutMsLeft: 45_000 })
+    const { rerender } = render(<PinPrompt settings={settings} lock={lock} database={database} />)
+
+    expect(screen.getByRole('button', { name: 'Forgot the PIN?' })).toBeDisabled()
+
+    // And if the lockout starts while the recovery view is already open,
+    // it says so there rather than just disabling everything silently.
+    rerender(<PinPrompt settings={settings} lock={stubLock()} database={database} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Forgot the PIN?' }))
+    rerender(<PinPrompt settings={settings} lock={lock} database={database} />)
+
+    expect(screen.getByRole('heading', { name: 'Enter the recovery code' })).toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveTextContent('Too many wrong tries. Try again in 45s.')
+    expect(screen.getByLabelText('Recovery code')).toBeDisabled()
+  })
+
   it('says so, without burning an attempt, when Web Crypto is unavailable', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     const settings = await storedSettingsWithPin('4821')
@@ -249,6 +267,15 @@ describe('PinPrompt — settings not usable', () => {
 
     expect(screen.getByText('Checking the PIN…')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '1' })).not.toBeInTheDocument()
+  })
+
+  it('still offers a way out while loading, for the inline Void prompt', () => {
+    const onCancel = vi.fn()
+    render(<PinPrompt settings={null} lock={stubLock()} database={database} onCancel={onCancel} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    expect(onCancel).toHaveBeenCalledTimes(1)
   })
 
   it('fails closed when the settings read failed', () => {

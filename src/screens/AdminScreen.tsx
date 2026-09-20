@@ -102,11 +102,12 @@ export function AdminScreen({
         <p className="admin-message muted">Loading shop settings…</p>
       ) : (
         <>
-          <ShopSettingsForm
-            key={`${settings.shopName}|${settings.promptPayId}`}
-            settings={settings}
-            database={database}
-          />
+          {/* Deliberately *not* keyed on the stored values: `settings`
+              comes from a live query, so a successful save re-emits it and
+              a key like that would remount this form and throw away the
+              "Saved" confirmation the owner is waiting for. The fields hold
+              what was typed; the initial values only matter on mount. */}
+          <ShopSettingsForm settings={settings} database={database} />
           <CategoryOrderEditor settings={settings} database={database} />
         </>
       )}
@@ -130,10 +131,12 @@ interface ShopSettingsFormProps {
 /**
  * Shop name and PromptPay ID.
  *
- * Remounted (via a `key` on the stored values) whenever what's stored
- * changes, so the fields always start from the row rather than from a
- * stale edit. Saving goes through `updateSettings`, which merges into the
- * stored row — this form must never be able to blank the PIN hash.
+ * The fields start from the stored row and are then the owner's to edit;
+ * they are not re-synced from later re-emissions of `settings`, so a save
+ * landing (and the live query re-emitting) can't wipe the "Saved"
+ * confirmation or a half-typed field. Saving goes through
+ * `updateSettings`, which merges into the stored row inside a transaction
+ * — this form must never be able to blank the PromptPay ID or the PIN.
  */
 function ShopSettingsForm({ settings, database }: ShopSettingsFormProps) {
   const [shopName, setShopName] = useState(settings.shopName)

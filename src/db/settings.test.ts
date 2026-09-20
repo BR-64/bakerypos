@@ -197,6 +197,44 @@ describe('updateSettings', () => {
     })
   })
 
+  it('does not lose a patch when two edits overlap', async () => {
+    await saveSettings({ ...real, promptPayId: '0899999999' }, database)
+
+    // Exactly what two Admin controls with independent in-flight flags do:
+    // "Save shop settings" is still in flight when "Move Drinks up" is
+    // tapped. Without the transaction both reads see the same old row and
+    // whichever `put` lands last silently reverts the other's field — the
+    // corrected PromptPay ID going back to the old account.
+    const first = updateSettings({ promptPayId: '0812345678' }, database)
+    const second = updateSettings(
+      { categoryOrder: ['drink', 'bread', 'pastry', 'cake', 'other'] },
+      database,
+    )
+    await Promise.all([first, second])
+
+    const stored = await getSettings(database)
+    expect(stored.promptPayId).toBe('0812345678')
+    expect(stored.categoryOrder).toEqual(['drink', 'bread', 'pastry', 'cake', 'other'])
+  })
+
+  it('keeps the PIN through overlapping edits too', async () => {
+    await saveSettings({ ...real, pinHash, pinSalt, recoveryHash }, database)
+
+    await Promise.all([
+      updateSettings({ shopName: 'Sunrise Bakery II' }, database),
+      updateSettings({ promptPayId: '0898765432' }, database),
+    ])
+
+    await expect(getSettings(database)).resolves.toEqual({
+      ...real,
+      shopName: 'Sunrise Bakery II',
+      promptPayId: '0898765432',
+      pinHash,
+      pinSalt,
+      recoveryHash,
+    })
+  })
+
   it('refuses to write when the current row could not be read', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     const put = vi.spyOn(database.settings, 'put')

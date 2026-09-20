@@ -7,6 +7,7 @@ import { generateSalt, hashPin, MAX_PIN_ATTEMPTS } from '../domain/pin'
 import { DEFAULT_SETTINGS, type Settings } from '../domain/settings'
 import type { Product } from '../domain/types'
 import type { PinLock } from '../hooks/usePinLock'
+import { useSettings } from '../hooks/useSettings'
 import { AdminScreen } from './AdminScreen'
 
 let database: PosDatabase
@@ -276,6 +277,34 @@ describe('AdminScreen — shop settings', () => {
         promptPayId: '0812345678',
       }),
     )
+  })
+
+  it('confirms a save on screen, with settings coming from a live query as App feeds them', async () => {
+    // `renderAdmin` passes a static `settings` prop; App passes the live
+    // query's value, which re-emits on every save. Anything that remounted
+    // the form on that re-emission would throw away the confirmation the
+    // owner is waiting for, and no static-prop test would notice.
+    function LiveAdmin() {
+      const { settings, failed } = useSettings(database)
+      return (
+        <AdminScreen
+          database={database}
+          settings={settings}
+          settingsFailed={failed}
+          pinLock={stubLock()}
+        />
+      )
+    }
+    render(<LiveAdmin />)
+
+    fireEvent.change(await screen.findByLabelText('Shop name'), {
+      target: { value: 'Sunrise Bakery' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save shop settings' }))
+
+    expect(await screen.findByText('Saved')).toBeInTheDocument()
+    expect(screen.getByLabelText('Shop name')).toHaveValue('Sunrise Bakery')
+    await waitFor(async () => expect((await getSettings(database)).shopName).toBe('Sunrise Bakery'))
   })
 
   it('rejects a malformed PromptPay ID before it can reach a QR', async () => {

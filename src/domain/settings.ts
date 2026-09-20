@@ -57,7 +57,10 @@ export const DEFAULT_SETTINGS: Settings = {
   id: SETTINGS_ID,
   shopName: 'Bakery',
   promptPayId: PLACEHOLDER_PROMPTPAY_ID,
-  categoryOrder: CATEGORY_ORDER,
+  // A copy, never the exported `CATEGORY_ORDER` array itself: anything
+  // that reordered this default in place would silently reorder the
+  // constant every other caller reads.
+  categoryOrder: [...CATEGORY_ORDER],
   // No default PIN (SPEC): a device with no stored hash shows the
   // first-run set-PIN flow instead of accepting some well-known number.
   pinHash: null,
