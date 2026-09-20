@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { addProduct } from '../domain/cart'
 import { cartTotal } from '../domain/money'
+import type { Order } from '../domain/types'
 import { PosDatabase } from './db'
-import { completeOrder, voidOrder } from './orders'
+import { completeOrder, todaysOrders, voidOrder } from './orders'
 import { seedProducts } from './seed'
 
 let database: PosDatabase
@@ -186,5 +187,100 @@ describe('voidOrder', () => {
 
   it('throws for an unknown id', async () => {
     await expect(voidOrder('nope', 'x', database)).rejects.toThrow('not found')
+  })
+})
+
+function makeOrder(overrides: Partial<Order> = {}): Order {
+  return {
+    id: `o-${Math.random()}`,
+    number: 1,
+    lines: [croissant],
+    total: 11000,
+    payment: { method: 'cash', tendered: 11000, change: 0 },
+    status: 'completed',
+    createdAt: new Date().toISOString(),
+    sync: 'pending',
+    ...overrides,
+  }
+}
+
+describe('todaysOrders', () => {
+  // Jan 15, 2026, 10:00 local — the reference "now" most tests pass in.
+  const now = new Date(2026, 0, 15, 10, 0)
+
+  it("returns only orders within today's local range, newest first", async () => {
+    const startOfDay = new Date(2026, 0, 15, 0, 0, 0, 0)
+    const midDay = new Date(2026, 0, 15, 12, 0)
+    const justBeforeMidnight = new Date(new Date(2026, 0, 16, 0, 0, 0, 0).getTime() - 1)
+    const yesterday = new Date(2026, 0, 14, 23, 59)
+    const tomorrow = new Date(2026, 0, 16, 0, 0, 0, 0)
+
+    const orders = [
+      makeOrder({ id: 'o-morning', number: 1, createdAt: startOfDay.toISOString() }),
+      makeOrder({ id: 'o-mid', number: 2, createdAt: midDay.toISOString() }),
+      makeOrder({ id: 'o-late', number: 3, createdAt: justBeforeMidnight.toISOString() }),
+      makeOrder({ id: 'o-yesterday', number: 4, createdAt: yesterday.toISOString() }),
+      makeOrder({ id: 'o-tomorrow', number: 5, createdAt: tomorrow.toISOString() }),
+    ]
+    await database.orders.bulkAdd(orders)
+
+    const result = await todaysOrders(database, now)
+    expect(result.map((o) => o.id)).toEqual(['o-late', 'o-mid', 'o-morning'])
+  })
+
+  it('breaks a createdAt tie by number, highest (newest) first', async () => {
+    const sameInstant = new Date(2026, 0, 15, 12, 0).toISOString()
+    await database.orders.bulkAdd([
+      makeOrder({ id: 'o-a', number: 1, createdAt: sameInstant }),
+      makeOrder({ id: 'o-b', number: 2, createdAt: sameInstant }),
+    ])
+
+    const result = await todaysOrders(database, now)
+    expect(result.map((o) => o.id)).toEqual(['o-b', 'o-a'])
+  })
+
+  it('an order with a missing createdAt neither appears nor throws', async () => {
+    const bad = makeOrder({ id: 'o-bad', number: 1 }) as Partial<Order>
+    delete bad.createdAt
+    const good = makeOrder({ id: 'o-good', number: 2, createdAt: now.toISOString() })
+    await database.orders.bulkAdd([bad as Order, good])
+
+    const result = await todaysOrders(database, now)
+    expect(result.map((o) => o.id)).toEqual(['o-good'])
+  })
+
+  it('an order with a non-string createdAt neither appears nor throws', async () => {
+    const bad = makeOrder({ id: 'o-bad', number: 1 })
+    // @ts-expect-error deliberately corrupt createdAt for the test
+    bad.createdAt = 1234567890
+    await database.orders.bulkAdd([bad])
+
+    await expect(todaysOrders(database, now)).resolves.toEqual([])
+  })
+
+  it('excludes voided orders from neither day nor status — voided orders still appear', async () => {
+    const voided = makeOrder({
+      id: 'o-voided',
+      number: 1,
+      status: 'voided',
+      voidedAt: now.toISOString(),
+      voidReason: 'test',
+      createdAt: now.toISOString(),
+    })
+    await database.orders.add(voided)
+
+    const result = await todaysOrders(database, now)
+    expect(result.map((o) => o.id)).toEqual(['o-voided'])
+  })
+
+  it('defaults `now` to the current time', async () => {
+    const order = await completeOrder(
+      [croissant],
+      { method: 'cash', tendered: 11000, change: 0 },
+      database,
+    )
+
+    const result = await todaysOrders(database)
+    expect(result.map((o) => o.id)).toContain(order.id)
   })
 })

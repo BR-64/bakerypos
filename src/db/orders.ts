@@ -1,5 +1,6 @@
 import { v4 as uuid } from 'uuid'
 import { partitionCartLines } from '../domain/cart'
+import { localDayRange } from '../domain/day'
 import { cartTotal } from '../domain/money'
 import type { CartLine, Order, Payment } from '../domain/types'
 import { db, type PosDatabase } from './db'
@@ -68,4 +69,41 @@ export async function voidOrder(
     sync: 'pending',
   })
   if (n === 0) throw new Error(`Order ${id} not found`)
+}
+
+/**
+ * Today's orders (completed and voided alike), newest-first, for the Orders
+ * screen. Additive only — does not change `completeOrder`/`voidOrder`.
+ *
+ * Reads via the indexed `createdAt` range rather than `toArray()` +
+ * filtering in JS, unlike `sellableProducts`: order history only grows, so
+ * scanning every row on every render isn't acceptable the way it is for the
+ * (bounded) product list. That indexed read is also this function's one
+ * documented blind spot: an order whose `createdAt` is missing or not a
+ * string isn't a valid IndexedDB key for the `createdAt` index, so
+ * IndexedDB silently excludes that row from the range scan before this
+ * function ever sees it — such an order can never appear here, and there is
+ * no way to detect or log it at this layer. `isValidOrder`/`partitionOrders`
+ * (`src/domain/order.ts`) validate everything this *does* return.
+ *
+ * `between(startISO, endISO, true, false)` is the half-open range
+ * `[startISO, endISO)` from `localDayRange` — `toISOString()`'s fixed-width,
+ * zero-padded format sorts identically as a string and as an instant, so
+ * this comparison is exact. Sorted newest-first by `createdAt`, then by
+ * `number` descending as a tiebreaker for two orders stored in the same
+ * millisecond.
+ */
+export async function todaysOrders(
+  database: PosDatabase = db,
+  now: Date = new Date(),
+): Promise<Order[]> {
+  const { startISO, endISO } = localDayRange(now)
+  const orders = await database.orders
+    .where('createdAt')
+    .between(startISO, endISO, true, false)
+    .toArray()
+  return orders.sort((a, b) => {
+    if (a.createdAt !== b.createdAt) return a.createdAt < b.createdAt ? 1 : -1
+    return b.number - a.number
+  })
 }
