@@ -11,7 +11,10 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
-    <link rel="apple-touch-icon" href="/icons/icon.svg" />
+    <!-- iOS ignores an SVG apple-touch-icon: "Add to Home screen" would
+         fall back to a screenshot of the page. The PNG is generated from
+         the same SVG by scripts/generate-icons.mjs. -->
+    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
     <title>Bakery POS</title>
   </head>
   <body>

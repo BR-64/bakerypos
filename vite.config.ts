@@ -19,8 +19,20 @@ export default defineConfig({
         display: 'standalone',
         orientation: 'portrait',
         start_url: '/',
+        // The PNGs are what Android and iOS actually install with (both
+        // ignore an SVG in one place or another), and they are the
+        // maskable pair: generated full-bleed, with the bread inside the
+        // middle 80% a launcher mask may crop to — see
+        // `scripts/generate-icons.mjs`, which regenerates them from the
+        // SVG. The SVG stays for anything that prefers a scalable icon,
+        // but as `any` only: its rounded corners are transparent, so a
+        // square mask would show them.
         icons: [
-          { src: 'icons/icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' },
+          { src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'maskable' },
+          { src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          { src: 'icons/icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
         ],
       },
       workbox: {

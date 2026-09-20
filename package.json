@@ -10,6 +10,7 @@
     "lint": "oxlint src",
     "format": "prettier --write .",
     "typecheck": "tsc -b",
+    "icons": "node scripts/generate-icons.mjs",
     "test": "vitest run",
     "test:watch": "vitest"
   },
