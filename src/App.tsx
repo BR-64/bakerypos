@@ -100,9 +100,11 @@ export default function App({ database = db }: { database?: PosDatabase }) {
   // screen, for two reasons: one unlock covers Admin and Void together for
   // its 5 minutes, and the wrong-attempt count and 60-second lockout
   // survive the prompt being unmounted — otherwise tapping Sell and then
-  // Admin again would wipe five wrong guesses. It is in-memory only, so
-  // closing the app locks everything again (docs/SPEC.md).
-  const pinLock = usePinLock()
+  // Admin again would wipe five wrong guesses. The unlock is in-memory
+  // only, so closing the app locks everything again (docs/SPEC.md); the
+  // 60-second lockout is the one piece that is stored, and it comes from
+  // the settings row already read above rather than a second query.
+  const pinLock = usePinLock({ database, storedLockedUntil: settings?.lockedUntil ?? null })
 
   const [screen, setScreen] = useState<Screen>(HOME_SCREEN)
   const [retryKey, setRetryKey] = useState(0)

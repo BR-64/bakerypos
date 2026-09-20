@@ -28,6 +28,31 @@ export const PIN_LOCKOUT_MS = 60_000
 /** How long a successful unlock lasts (SPEC: 5 minutes, or until the app closes). */
 export const UNLOCK_DURATION_MS = 5 * 60_000
 
+/**
+ * A stored lockout deadline (`settings.lockedUntil`), if it is one worth
+ * honouring at `now` — otherwise `null`.
+ *
+ * The lockout is persisted so that force-quitting the app is not a way
+ * around it (`usePinLock`), which means the deadline in the settings row
+ * is untrusted data like everything else read back from Dexie: it can be
+ * a string, a `NaN`, a year-3000 timestamp written by a phone whose clock
+ * was wrong, or simply a perfectly good deadline on a phone whose clock
+ * has since been wound back.
+ *
+ * So anything that is not a positive safe integer is ignored, and — the
+ * important one — so is any deadline **more than one lockout away**. The
+ * keypad this guards is the only way into Admin, and the recovery code is
+ * behind the same keypad, so an unbounded stored deadline could lock the
+ * owner out of their own shop for years with no way back. Capping it at
+ * `PIN_LOCKOUT_MS` makes the worst case 60 seconds.
+ */
+export function usableLockoutDeadline(lockedUntil: unknown, now: number): number | null {
+  if (typeof lockedUntil !== 'number' || !Number.isSafeInteger(lockedUntil)) return null
+  if (lockedUntil <= now) return null
+  if (lockedUntil - now > PIN_LOCKOUT_MS) return null
+  return lockedUntil
+}
+
 /** Shown when the device has no Web Crypto (an insecure context, e.g. plain http). */
 export const PIN_CRYPTO_UNAVAILABLE_MESSAGE =
   'This device can’t secure a PIN — open the app over https. Admin stays locked.'

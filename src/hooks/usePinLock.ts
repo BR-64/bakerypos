@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { MAX_PIN_ATTEMPTS, PIN_LOCKOUT_MS, UNLOCK_DURATION_MS } from '../domain/pin'
+import { db, type PosDatabase } from '../db/db'
+import { updateSettings } from '../db/settings'
+import { safeString } from '../domain/log'
+import {
+  MAX_PIN_ATTEMPTS,
+  PIN_LOCKOUT_MS,
+  UNLOCK_DURATION_MS,
+  usableLockoutDeadline,
+} from '../domain/pin'
 
 export interface PinLock {
   /** True while Admin (and Void) are unlocked. False once the 5 minutes are up. */
@@ -14,6 +22,22 @@ export interface PinLock {
   lock: () => void
   /** A wrong PIN: count it, and start the lockout on the fifth. */
   registerFailure: () => void
+}
+
+export interface PinLockOptions {
+  /** Where the lockout is stored. Defaults to the app's database. */
+  database?: PosDatabase
+  /**
+   * `settings.lockedUntil` as it was last read — App already holds the
+   * settings row live (`useSettings`), so the lock reads it from there
+   * rather than opening its own query.
+   *
+   * `null` covers both "no lockout stored" and "not read yet". Whatever
+   * arrives is untrusted (it came back from Dexie): it is filtered through
+   * `usableLockoutDeadline`, which ignores junk and anything more than one
+   * lockout away.
+   */
+  storedLockedUntil?: number | null
 }
 
 /**
@@ -31,12 +55,19 @@ export interface PinLock {
  *   tapping Sell and then Admin again, which would make the lockout
  *   decorative.
  *
- * All of it is in-memory only, so it is gone when the app closes — exactly
- * what the SPEC asks of the unlock ("5 minutes or until the app is
- * closed"). The lockout goes with it: persisting a countdown to Dexie
- * would mean a write per wrong guess, and a clock-based lockout stored on
- * the device it is defending buys little. This is a counter-top kiosk,
- * not a bank.
+ * The **unlock** is in-memory only, so it is gone when the app closes —
+ * exactly what the SPEC asks of it ("5 minutes or until the app is
+ * closed"). The **lockout** is not: it is written to the settings row
+ * (`lockedUntil`), because otherwise force-quitting the app — a swipe up
+ * from the app switcher — would be a five-second way around five wrong
+ * guesses, which would make the lockout decorative in the one situation
+ * it exists for. One write per lockout, never per wrong guess.
+ *
+ * A stored deadline can only ever hold the keypad for `PIN_LOCKOUT_MS`:
+ * `usableLockoutDeadline` throws away anything malformed or further away
+ * than one lockout, so a corrupt row or a wandering device clock cannot
+ * shut the owner out of Admin — and so out of the recovery code, which is
+ * behind the same keypad — for good.
  *
  * Both deadlines are compared against `Date.now()` at render rather than
  * against a stored "now", so a timer that never fires (a backgrounded
@@ -44,9 +75,16 @@ export interface PinLock {
  * minutes. The timer only exists to force the re-render at the moment a
  * deadline passes; it is cleared on unmount.
  */
-export function usePinLock(): PinLock {
+export function usePinLock({
+  database = db,
+  storedLockedUntil = null,
+}: PinLockOptions = {}): PinLock {
   const [unlockedUntil, setUnlockedUntil] = useState<number | null>(null)
-  const [lockedUntil, setLockedUntil] = useState<number | null>(null)
+  const [ownLockedUntil, setOwnLockedUntil] = useState<number | null>(null)
+  // Set by `unlock`: a correct PIN or recovery code ends the lockout here
+  // and now, and the stored deadline must not drag it back while the write
+  // clearing it is still in flight (or if that write fails outright).
+  const [storedCleared, setStoredCleared] = useState(false)
   const [failures, setFailures] = useState(0)
   const [tick, setTick] = useState(0)
 
@@ -58,7 +96,22 @@ export function usePinLock(): PinLock {
   // eslint-disable-next-line react/purity
   const now = Date.now()
   const unlocked = unlockedUntil !== null && now < unlockedUntil
-  const lockoutMsLeft = lockedUntil !== null && now < lockedUntil ? lockedUntil - now : 0
+
+  // The lockout in force is the later of this session's own deadline and
+  // the one a previous run stored, each filtered through
+  // `usableLockoutDeadline` so neither a stale nor an absurd value can do
+  // anything. No effect copies the stored value into state: it is simply
+  // read every render, which means a settings read landing late (or a
+  // write from elsewhere) can never fight with what the keypad is doing.
+  const ownDeadline = usableLockoutDeadline(ownLockedUntil, now)
+  const storedDeadline = storedCleared ? null : usableLockoutDeadline(storedLockedUntil, now)
+  const lockedUntil =
+    ownDeadline === null
+      ? storedDeadline
+      : storedDeadline === null
+        ? ownDeadline
+        : Math.max(ownDeadline, storedDeadline)
+  const lockoutMsLeft = lockedUntil === null ? 0 : lockedUntil - now
 
   // Re-render exactly when the next deadline passes, so "unlocked" and the
   // lockout message stop being true on their own, with no polling.
@@ -79,11 +132,31 @@ export function usePinLock(): PinLock {
     // 5-minute unlock with no timer of its own.
   }, [unlockedUntil, lockedUntil, tick])
 
+  // Store the lockout deadline (or clear it). Fire-and-forget on purpose:
+  // the keypad's own state has already changed, and a failed write must
+  // not throw out of a tap handler. The cost of a lost write is at most
+  // one lockout not surviving a force-quit, or one surviving 60 seconds
+  // longer than it should.
+  const persist = useCallback(
+    (value: number | null) => {
+      void updateSettings({ lockedUntil: value }, database).catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : safeString(error)
+        console.error(`usePinLock: couldn't store the lockout — ${message}`)
+      })
+    },
+    [database],
+  )
+
   const unlock = useCallback(() => {
     setUnlockedUntil(Date.now() + UNLOCK_DURATION_MS)
     setFailures(0)
-    setLockedUntil(null)
-  }, [])
+    setOwnLockedUntil(null)
+    // A correct PIN or recovery code ends any lockout, including one this
+    // session inherited from the settings row — so ignore that one from
+    // here on, and clear it on disk too.
+    setStoredCleared(true)
+    if (lockedUntil !== null) persist(null)
+  }, [lockedUntil, persist])
 
   const lock = useCallback(() => setUnlockedUntil(null), [])
 
@@ -93,11 +166,16 @@ export function usePinLock(): PinLock {
       // The count restarts with the lockout, so the sixth wrong guess after
       // it expires isn't instantly locked out again.
       setFailures(0)
-      setLockedUntil(Date.now() + PIN_LOCKOUT_MS)
+      const deadline = Date.now() + PIN_LOCKOUT_MS
+      setOwnLockedUntil(deadline)
+      // The one write: a lockout that a force-quit could shrug off would
+      // not be a lockout.
+      setStoredCleared(false)
+      persist(deadline)
       return
     }
     setFailures(next)
-  }, [failures])
+  }, [failures, persist])
 
   return useMemo(
     () => ({

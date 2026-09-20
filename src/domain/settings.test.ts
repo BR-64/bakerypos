@@ -24,6 +24,7 @@ const good: Settings = {
   pinHash: null,
   pinSalt: null,
   recoveryHash: null,
+  lockedUntil: null,
 }
 
 const withPin: Settings = { ...good, pinHash: hash, pinSalt: salt, recoveryHash: otherHash }
@@ -167,6 +168,31 @@ describe('coerceSettings', () => {
       ...withPin,
       recoveryHash: null,
     })
+  })
+
+  it('carries lockedUntil across a save, so a force-quit cannot shrug off a lockout', () => {
+    // Same contract as the PIN fields: `saveSettings` writes
+    // `coerceSettings(input)`, so a field forgotten here is dropped on
+    // every write — and a lockout that doesn't survive being written is
+    // no lockout at all.
+    const deadline = 1_700_000_060_000
+
+    expect(coerceSettings({ ...good, lockedUntil: deadline }).lockedUntil).toBe(deadline)
+  })
+
+  it.each([
+    ['a string', '1700000060000'],
+    ['NaN', Number.NaN],
+    ['Infinity', Number.POSITIVE_INFINITY],
+    ['a non-integer', 1.5],
+    ['a number past the safe range', 1e300],
+    ['zero', 0],
+    ['a negative timestamp', -1],
+    ['a bigint', 10n],
+    ['an object', {}],
+  ])('drops a lockedUntil that is %s', (_label, value) => {
+    expect(coerceSettings({ ...good, lockedUntil: value }).lockedUntil).toBeNull()
+    expect(isValidSettings({ ...good, lockedUntil: value })).toBe(false)
   })
 
   it('repairs a category order that is missing, junk, duplicated or unknown', () => {

@@ -12,6 +12,7 @@ import {
   PIN_CRYPTO_UNAVAILABLE_MESSAGE,
   PIN_LOCKOUT_MS,
   UNLOCK_DURATION_MS,
+  usableLockoutDeadline,
   verifyPin,
 } from './pin'
 
@@ -166,6 +167,45 @@ describe('normalizeRecoveryCode', () => {
     expect(normalizeRecoveryCode(null)).toBe('')
     expect(normalizeRecoveryCode(1234)).toBe('')
     expect(normalizeRecoveryCode('!!!')).toBe('')
+  })
+})
+
+describe('usableLockoutDeadline', () => {
+  const now = 1_700_000_000_000
+
+  it('honours a deadline inside the next lockout', () => {
+    expect(usableLockoutDeadline(now + 1, now)).toBe(now + 1)
+    expect(usableLockoutDeadline(now + PIN_LOCKOUT_MS, now)).toBe(now + PIN_LOCKOUT_MS)
+  })
+
+  it('ignores a deadline that has passed', () => {
+    expect(usableLockoutDeadline(now, now)).toBeNull()
+    expect(usableLockoutDeadline(now - 1, now)).toBeNull()
+  })
+
+  it('ignores a deadline further off than one lockout, whatever put it there', () => {
+    // A corrupt row, a device whose clock was hours ahead when it was
+    // written, or one that has since been wound back. The recovery code
+    // lives behind this same keypad, so an honoured year-3000 deadline
+    // would lock the owner out of their own shop with no way back.
+    expect(usableLockoutDeadline(now + PIN_LOCKOUT_MS + 1, now)).toBeNull()
+    expect(usableLockoutDeadline(now + 365 * 24 * 3600_000, now)).toBeNull()
+    expect(usableLockoutDeadline(Number.MAX_SAFE_INTEGER, now)).toBeNull()
+  })
+
+  it.each([
+    ['null', null],
+    ['undefined', undefined],
+    ['a string', '1700000000001'],
+    ['NaN', Number.NaN],
+    ['Infinity', Number.POSITIVE_INFINITY],
+    ['a non-integer', now + 0.5],
+    ['a number past the safe range', 1e300],
+    ['a bigint', 10n],
+    ['an object', {}],
+  ])('ignores %s without throwing', (_label, value) => {
+    expect(() => usableLockoutDeadline(value, now)).not.toThrow()
+    expect(usableLockoutDeadline(value, now)).toBeNull()
   })
 })
 

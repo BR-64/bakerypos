@@ -40,6 +40,22 @@ export interface Settings {
    * was unusable — the PIN still works then, only recovery is gone.
    */
   recoveryHash: string | null
+  /**
+   * When the PIN keypad's 60-second lockout ends (`Date.now()` epoch
+   * milliseconds), or `null` when nothing is locked out.
+   *
+   * Stored rather than kept in memory so that force-quitting the app
+   * isn't a way around five wrong guesses. It is an ordinary unindexed
+   * field, so it needs no new Dexie version — but it does need handling
+   * here, or `saveSettings` would drop it on every write.
+   *
+   * Only shape is checked here (a positive safe integer). Whether a
+   * deadline is one worth honouring is a question about *now*, and lives
+   * in `usableLockoutDeadline` (`./pin.ts`), which refuses anything more
+   * than one lockout away so a corrupt or far-future value can never lock
+   * the owner out for good.
+   */
+  lockedUntil: number | null
 }
 
 /**
@@ -66,6 +82,8 @@ export const DEFAULT_SETTINGS: Settings = {
   pinHash: null,
   pinSalt: null,
   recoveryHash: null,
+  // Nothing is locked out on a device that has never been used.
+  lockedUntil: null,
 }
 
 /** Longest shop name Admin accepts — it has to fit a phone-width report header. */
@@ -126,6 +144,17 @@ function coercePinFields(
   }
 }
 
+/**
+ * A stored lockout deadline, kept only if it is shaped like one: a
+ * positive safe integer of epoch milliseconds. Whether it is still worth
+ * honouring is `usableLockoutDeadline`'s job, not this one's — coercion
+ * must not depend on what time it is, or a row would stop being "valid"
+ * merely because a minute went by.
+ */
+function coerceLockedUntil(value: unknown): number | null {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? value : null
+}
+
 function sameOrder(a: unknown, b: Category[]): boolean {
   return Array.isArray(a) && a.length === b.length && b.every((c, i) => a[i] === c)
 }
@@ -150,7 +179,8 @@ export function isValidSettings(value: unknown): value is Settings {
     sameOrder(s.categoryOrder, coerceCategoryOrder(s.categoryOrder)) &&
     s.pinHash === pin.pinHash &&
     s.pinSalt === pin.pinSalt &&
-    s.recoveryHash === pin.recoveryHash
+    s.recoveryHash === pin.recoveryHash &&
+    s.lockedUntil === coerceLockedUntil(s.lockedUntil)
   )
 }
 
@@ -183,5 +213,6 @@ export function coerceSettings(value: unknown): Settings {
       : DEFAULT_SETTINGS.promptPayId,
     categoryOrder: coerceCategoryOrder(raw.categoryOrder),
     ...coercePinFields(raw),
+    lockedUntil: coerceLockedUntil(raw.lockedUntil),
   }
 }
