@@ -146,10 +146,10 @@ describe('SellScreen', () => {
         outOfStock: false,
         archived: false,
       },
-      // @ts-expect-error deliberately missing price
       {
         id: 'p-missing-price',
         name: 'Missing Price',
+        // @ts-expect-error deliberately missing price
         price: undefined,
         category: 'drink',
         sortOrder: 11,
@@ -165,9 +165,9 @@ describe('SellScreen', () => {
         outOfStock: false,
         archived: false,
       },
-      // @ts-expect-error deliberately missing name
       {
         id: 'p-undefined-name',
+        // @ts-expect-error deliberately missing name
         name: undefined,
         price: 2000,
         category: 'drink',
@@ -175,7 +175,6 @@ describe('SellScreen', () => {
         outOfStock: false,
         archived: false,
       },
-      // @ts-expect-error deliberately bad data
       {
         id: 'p-string-archived',
         name: 'String Archived',
@@ -183,24 +182,25 @@ describe('SellScreen', () => {
         category: 'drink',
         sortOrder: 14,
         outOfStock: false,
+        // @ts-expect-error deliberately bad data
         archived: 'false',
       },
-      // @ts-expect-error deliberately bad data
       {
         id: 'p-string-oos',
         name: 'String OOS',
         price: 2000,
         category: 'drink',
         sortOrder: 15,
+        // @ts-expect-error deliberately bad data
         outOfStock: 'false',
         archived: false,
       },
-      // @ts-expect-error deliberately missing sortOrder
       {
         id: 'p-undef-sort',
         name: 'Undef Sort',
         price: 2000,
         category: 'drink',
+        // @ts-expect-error deliberately missing sortOrder
         sortOrder: undefined,
         outOfStock: false,
         archived: false,
