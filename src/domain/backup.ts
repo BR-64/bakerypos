@@ -1,10 +1,11 @@
 import { partitionCartLines } from './cart'
-import { isKnownCategory } from './categories'
+import { categoryLabel, isKnownCategory } from './categories'
 import { formatLocalTime, localDayKey, localDayRange } from './day'
 import { cartTotal, formatBahtDecimal, lineTotal } from './money'
 import { isValidOrder } from './order'
+import { MAX_PRODUCT_NAME_LENGTH, MAX_PRODUCT_PRICE } from './productDraft'
 import { coerceSettings } from './settings'
-import type { Category, Order, OrderLine, Payment, Product } from './types'
+import type { Category, Order, OrderLine, Payment, Product, Satang } from './types'
 
 /**
  * Backup, export and import — pure. No React, no Dexie: everything here
@@ -45,6 +46,30 @@ export const BACKUP_FORMAT_VERSION = 1
  * told so than left with a frozen screen.
  */
 export const MAX_IMPORT_CHARS = 20_000_000
+
+/**
+ * The same limit in bytes, for a `File.size` check *before* the file is
+ * read into memory. A 1 GB file picked by mistake is an out-of-memory kill
+ * that no `try/catch` can catch, so the size is what the screen looks at
+ * first; UTF-8 is never fewer bytes than characters, so a file inside this
+ * is always inside `MAX_IMPORT_CHARS` too.
+ */
+export const MAX_IMPORT_BYTES = MAX_IMPORT_CHARS
+
+/** One wording for "too big", shared by the size check and the parse. */
+export const TOO_LARGE_MESSAGE = 'That file is too big to read on this phone.'
+
+/**
+ * Largest order `number` an import will accept.
+ *
+ * Not a cosmetic bound. `completeOrder` numbers the next sale
+ * `(highest stored number) + 1`; a file carrying
+ * `Number.MAX_SAFE_INTEGER` would make every later sale's number unsafe,
+ * and `isValidOrder` would then reject those orders — every sale after
+ * the import would vanish from the Orders screen and from the day's
+ * takings. A hundred million orders is several lifetimes of this bakery.
+ */
+export const MAX_ORDER_NUMBER = 100_000_000
 
 /**
  * Byte-order mark for the CSV file. Not part of `buildOrdersCsv`'s output
@@ -139,15 +164,22 @@ function usableDate(value: Date): Date {
  * Deliberately the same predicate `buildExport` filters with and
  * `parseImport` enforces: an export is therefore always re-importable, and
  * the round trip is exact for every record that passes.
+ *
+ * The name and price bounds are Admin's own (`MAX_PRODUCT_NAME_LENGTH`,
+ * `MAX_PRODUCT_PRICE`): an import must not be a side door to a product
+ * the add/edit form would refuse — a ฿2,000,000 croissant, or a name that
+ * doesn't fit a tile on a phone.
  */
 function productProblem(value: unknown): string | null {
   if (!isPlainObject(value)) return 'is not an object'
   const { id, name, price, category, sortOrder, archived, outOfStock } = value
   if (typeof id !== 'string' || id.length === 0) return 'has no id'
   if (typeof name !== 'string' || name.trim().length === 0) return 'has no name'
+  if (name.length > MAX_PRODUCT_NAME_LENGTH) return 'has a name that is too long'
   if (!Number.isSafeInteger(price) || (price as number) < 0) {
     return 'has a price that is not whole satang'
   }
+  if ((price as number) > MAX_PRODUCT_PRICE) return 'costs more than Admin allows'
   if (!isKnownCategory(category)) return 'has an unknown category'
   if (typeof sortOrder !== 'number' || !Number.isFinite(sortOrder)) {
     return 'has an unusable sort position'
@@ -199,6 +231,8 @@ function readLine(line: OrderLine): OrderLine {
  * - every header field `isValidOrder` checks, plus
  * - `createdAt` (and `voidedAt`, when present) canonical UTC — see
  *   `isCanonicalInstant`
+ * - `number` no higher than `MAX_ORDER_NUMBER`, so the import can't break
+ *   the numbering of every sale that comes after it
  * - `sync` exactly `'pending'` or `'synced'`
  * - at least one line, every line readable and non-duplicate
  *   (`partitionCartLines`, the same rule the cart and the Z report use)
@@ -213,6 +247,7 @@ function orderProblem(value: unknown): string | null {
   if (raw.voidedAt !== undefined && !isCanonicalInstant(raw.voidedAt)) {
     return 'has a void timestamp that is not a UTC ISO instant'
   }
+  if (value.number > MAX_ORDER_NUMBER) return 'has an order number that is out of range'
   if (raw.sync !== 'pending' && raw.sync !== 'synced') return 'has an unknown sync state'
   if (!Array.isArray(raw.lines) || raw.lines.length === 0) return 'has no lines'
   const { valid, invalid } = partitionCartLines(raw.lines as OrderLine[])
@@ -245,13 +280,78 @@ function readOrder(order: Order): Order {
  * PromptPay ID), and the pick is what guarantees nothing else — PIN hash,
  * salt, recovery hash, lockout deadline — can follow them into the file.
  */
-function readExportedSettings(value: unknown): ExportedSettings {
+export function readExportedSettings(value: unknown): ExportedSettings {
   const settings = coerceSettings(value)
   return {
     shopName: settings.shopName,
     promptPayId: settings.promptPayId,
     categoryOrder: [...settings.categoryOrder],
   }
+}
+
+/** One shop setting an import would overwrite, with both values to show. */
+export interface SettingsChange {
+  field: string
+  from: string
+  to: string
+}
+
+/** One product's price move, in satang — the screen formats it. */
+export interface PriceChange {
+  id: string
+  name: string
+  from: Satang
+  to: Satang
+}
+
+/**
+ * What importing `incoming` would change about the shop settings, field
+ * by field, with the value it would replace.
+ *
+ * This exists so the confirmation can *name* what is about to move.
+ * Replacing a PromptPay ID is the worst silent change in the app: restore
+ * a July backup in September to recover some orders, and every PromptPay
+ * sale afterwards pays the account the shop closed in June, with nothing
+ * on screen having said so.
+ */
+export function settingsChanges(
+  current: ExportedSettings,
+  incoming: ExportedSettings,
+): SettingsChange[] {
+  const changes: SettingsChange[] = []
+  if (current.shopName !== incoming.shopName) {
+    changes.push({ field: 'Shop name', from: current.shopName, to: incoming.shopName })
+  }
+  if (current.promptPayId !== incoming.promptPayId) {
+    changes.push({ field: 'PromptPay ID', from: current.promptPayId, to: incoming.promptPayId })
+  }
+  const order = (categories: Category[]) => categories.map(categoryLabel).join(', ')
+  if (order(current.categoryOrder) !== order(incoming.categoryOrder)) {
+    changes.push({
+      field: 'Category order',
+      from: order(current.categoryOrder),
+      to: order(incoming.categoryOrder),
+    })
+  }
+  return changes
+}
+
+/**
+ * Whether two products are the same in every field an import would write.
+ * Used to tell "already here and identical" from "already here and about
+ * to be replaced" — a difference the owner has to see before it happens,
+ * because replacing a product changes what the Sell grid charges.
+ */
+export function sameProduct(a: Product, b: Product): boolean {
+  return (
+    a.id === b.id &&
+    a.name === b.name &&
+    a.price === b.price &&
+    a.category === b.category &&
+    a.sortOrder === b.sortOrder &&
+    a.outOfStock === b.outOfStock &&
+    a.archived === b.archived
+  )
 }
 
 /**
@@ -495,12 +595,11 @@ const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
  * the object.
  */
 export function parseImport(text: unknown): ImportResult {
-  if (typeof text !== 'string' || text.trim().length === 0) {
-    return reject('empty', 'That file is empty.')
-  }
-  if (text.length > MAX_IMPORT_CHARS) {
-    return reject('too-large', 'That file is too big to read on this phone.')
-  }
+  if (typeof text !== 'string') return reject('empty', 'That file is empty.')
+  // Length before `trim()`: trimming a huge string copies it, and the
+  // point of this check is not to touch a huge string at all.
+  if (text.length > MAX_IMPORT_CHARS) return reject('too-large', TOO_LARGE_MESSAGE)
+  if (text.trim().length === 0) return reject('empty', 'That file is empty.')
 
   let parsed: unknown
   try {

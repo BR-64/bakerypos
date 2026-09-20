@@ -8,11 +8,15 @@ import {
   validateBackup,
   BACKUP_FORMAT,
   BACKUP_FORMAT_VERSION,
+  sameProduct,
+  settingsChanges,
   MAX_IMPORT_CHARS,
+  MAX_ORDER_NUMBER,
   type BackupInput,
   type BackupPayload,
 } from './backup'
 import { parseBahtInput } from './money'
+import { MAX_PRODUCT_NAME_LENGTH, MAX_PRODUCT_PRICE } from './productDraft'
 import { buildZReport } from './report'
 import { DEFAULT_SETTINGS, type Settings } from './settings'
 import type { Order, OrderLine, Product } from './types'
@@ -256,6 +260,14 @@ describe('parseImport — what it refuses', () => {
     if (!result.ok) expect(result.reason).toBe('too-large')
   })
 
+  it('checks the length before trimming, so a huge string is never copied', () => {
+    // Whitespace alone would otherwise read as "empty" only *after* a
+    // full-size `trim()` copy of the string.
+    const result = parseImport(' '.repeat(MAX_IMPORT_CHARS + 1))
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.reason).toBe('too-large')
+  })
+
   it('refuses a missing or non-list product/order collection', () => {
     expect(parseImport(JSON.stringify({ ...exported(), products: null }))).toMatchObject({
       reason: 'bad-products',
@@ -276,6 +288,10 @@ describe('parseImport — what it refuses', () => {
     ['an unknown category', { ...croissant, category: 'sandwich' }],
     ['a corrupt sold-out flag', { ...croissant, outOfStock: 'false' }],
     ['no sort position', { ...croissant, sortOrder: Number.NaN }],
+    // Admin's own limits: an import is not a side door to a product the
+    // add/edit form would refuse.
+    ['a name longer than Admin allows', { ...croissant, name: 'x'.repeat(41) }],
+    ['a price above Admin’s ceiling', { ...croissant, price: MAX_PRODUCT_PRICE + 1 }],
   ]
 
   for (const [what, product] of badProducts) {
@@ -312,6 +328,10 @@ describe('parseImport — what it refuses', () => {
     ['an unparseable timestamp', { ...order(), createdAt: 'yesterday' }],
     ['a non-UTC timestamp', { ...order(), createdAt: '2026-09-20T07:00:01.000+07:00' }],
     ['an unknown sync state', { ...order(), sync: 'maybe' }],
+    // A number this big validates as a safe integer, but `completeOrder`
+    // would then compute an unsafe `number + 1` for every sale after it.
+    ['an unusable order number', { ...order(), number: Number.MAX_SAFE_INTEGER }],
+    ['an order number just over the limit', { ...order(), number: MAX_ORDER_NUMBER + 1 }],
   ]
 
   for (const [what, corrupt] of badOrders) {
@@ -324,6 +344,24 @@ describe('parseImport — what it refuses', () => {
       }
     })
   }
+
+  it('accepts the boundary values themselves', () => {
+    const result = parseImport(
+      JSON.stringify({
+        ...exported(),
+        products: [
+          { ...croissant, name: 'x'.repeat(MAX_PRODUCT_NAME_LENGTH), price: MAX_PRODUCT_PRICE },
+        ],
+        orders: [order({ number: MAX_ORDER_NUMBER })],
+      }),
+    )
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.payload.products[0].price).toBe(MAX_PRODUCT_PRICE)
+      expect(result.payload.orders[0].number).toBe(MAX_ORDER_NUMBER)
+    }
+  })
 
   it('refuses a file that lists the same id twice', () => {
     expect(
@@ -430,6 +468,47 @@ describe('validateBackup', () => {
     const result = validateBackup(payload)
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.reason).toBe('bad-orders')
+  })
+})
+
+describe('settingsChanges', () => {
+  const here = { shopName: 'Sunrise Bakery', promptPayId: '0812345678', categoryOrder: [] }
+  const file = { shopName: 'Sunrise Bakery', promptPayId: '0899999999', categoryOrder: [] }
+
+  it('names the PromptPay account an import would redirect sales to', () => {
+    expect(settingsChanges({ ...here }, { ...file })).toEqual([
+      { field: 'PromptPay ID', from: '0812345678', to: '0899999999' },
+    ])
+  })
+
+  it('reports the shop name and the category order too, with readable labels', () => {
+    const changes = settingsChanges(
+      { ...here, categoryOrder: ['bread', 'cake'] },
+      { ...here, shopName: 'Old Name', categoryOrder: ['cake', 'bread'] },
+    )
+
+    expect(changes).toEqual([
+      { field: 'Shop name', from: 'Sunrise Bakery', to: 'Old Name' },
+      { field: 'Category order', from: 'Bread, Cake', to: 'Cake, Bread' },
+    ])
+  })
+
+  it('is empty when nothing would move', () => {
+    expect(
+      settingsChanges({ ...here, categoryOrder: ['bread'] }, { ...here, categoryOrder: ['bread'] }),
+    ).toEqual([])
+  })
+})
+
+describe('sameProduct', () => {
+  it('is true only when every field an import would write matches', () => {
+    expect(sameProduct(croissant, { ...croissant })).toBe(true)
+    expect(sameProduct(croissant, { ...croissant, price: 4500 })).toBe(false)
+    expect(sameProduct(croissant, { ...croissant, name: 'Butter croissant' })).toBe(false)
+    expect(sameProduct(croissant, { ...croissant, sortOrder: 9 })).toBe(false)
+    expect(sameProduct(croissant, { ...croissant, outOfStock: true })).toBe(false)
+    expect(sameProduct(croissant, { ...croissant, archived: true })).toBe(false)
+    expect(sameProduct(croissant, { ...croissant, category: 'bread' })).toBe(false)
   })
 })
 
