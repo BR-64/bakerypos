@@ -40,7 +40,18 @@ export function OrdersScreen({ database = db }: OrdersScreenProps) {
   return (
     <main className="app screen orders-screen">
       <h1 className="orders-title">Orders</h1>
-      <ErrorBoundary key={retryKey} onRetry={() => setRetryKey((k) => k + 1)}>
+      <ErrorBoundary
+        key={retryKey}
+        onRetry={() => {
+          // Reset the open detail too, not just the boundary's remount key:
+          // if whatever's open crashed rendering (e.g. a corrupt field
+          // `isValidOrder` doesn't yet know to check), leaving `selectedId`
+          // pointed at the same order would just crash again on "Try
+          // again", forever, with only the nav able to escape.
+          setSelectedId(null)
+          setRetryKey((k) => k + 1)
+        }}
+      >
         <OrdersBody
           database={database}
           selectedId={selectedId}
@@ -181,11 +192,22 @@ function OrderDetail({ order, database, onBack }: OrderDetailProps) {
     (line) => describeInvalidOrderLine(order.id, line),
   )
 
-  const { pending, error, voidOrder } = useVoidOrder(database)
   const [voidPanelOpen, setVoidPanelOpen] = useState(false)
   const [reasonChoice, setReasonChoice] = useState('')
   const [otherText, setOtherText] = useState('')
   const keepButtonRef = useRef<HTMLButtonElement>(null)
+
+  // Closes the panel (and clears its fields) the instant a void succeeds —
+  // in the same update as `pending` returning to `false` — rather than
+  // waiting for `useLiveQuery` to re-emit the now-voided order (which is
+  // what actually makes `isVoided` hide "Yes, void" below). Without this, a
+  // second real tap could land in that gap and void the same order again,
+  // rewriting `voidedAt`/`sync`.
+  const { pending, error, voidOrder, reset } = useVoidOrder(database, () => {
+    setVoidPanelOpen(false)
+    setReasonChoice('')
+    setOtherText('')
+  })
 
   useEffect(() => {
     if (voidPanelOpen) keepButtonRef.current?.focus()
@@ -199,6 +221,10 @@ function OrderDetail({ order, database, onBack }: OrderDetailProps) {
     setVoidPanelOpen(false)
     setReasonChoice('')
     setOtherText('')
+    // Otherwise a failed attempt's alert would still be showing the next
+    // time the panel opens, before anything has been retried — reading as
+    // a fresh failure that hasn't actually happened yet.
+    reset()
   }
 
   return (

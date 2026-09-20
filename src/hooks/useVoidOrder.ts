@@ -15,6 +15,13 @@ export interface VoidOrder {
   error: string | null
   /** Void the order. Extra calls while one is in flight are ignored. */
   voidOrder: (id: string, reason: string) => void
+  /**
+   * Clear a stale `error` without attempting anything — call this when the
+   * caller dismisses the failure (e.g. "Keep order"), so reopening the void
+   * panel afterwards doesn't show a leftover alert from an attempt nobody
+   * has retried yet.
+   */
+  reset: () => void
 }
 
 /**
@@ -22,8 +29,18 @@ export interface VoidOrder {
  * `useCompleteOrder`'s synchronous in-flight ref, so a double tap on
  * "Yes, void" — even two clicks in the same event loop turn, before React
  * re-renders with `pending` — voids the order exactly once.
+ *
+ * `onSuccess`, if given, runs synchronously in the same update as `pending`
+ * returning to `false` on success. The caller uses it to close the void
+ * panel immediately, rather than waiting for the Orders screen's
+ * `useLiveQuery` to re-emit the now-voided order (which is what actually
+ * hides "Yes, void", via `isVoided`) — without it, there's a real window
+ * between the write settling (`pending` already `false`, so the button is
+ * enabled again) and that re-emit landing, in which a second tap would
+ * void the same order again, rewriting `voidedAt`/`sync` on an order that's
+ * already voided.
  */
-export function useVoidOrder(database: PosDatabase): VoidOrder {
+export function useVoidOrder(database: PosDatabase, onSuccess?: () => void): VoidOrder {
   const inFlight = useRef(false)
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -38,6 +55,7 @@ export function useVoidOrder(database: PosDatabase): VoidOrder {
         () => {
           inFlight.current = false
           setPending(false)
+          onSuccess?.()
         },
         (err: unknown) => {
           const message = err instanceof Error ? err.message : safeString(err)
@@ -48,8 +66,10 @@ export function useVoidOrder(database: PosDatabase): VoidOrder {
         },
       )
     },
-    [database],
+    [database, onSuccess],
   )
 
-  return { pending, error, voidOrder }
+  const reset = useCallback(() => setError(null), [])
+
+  return { pending, error, voidOrder, reset }
 }

@@ -323,4 +323,110 @@ describe('OrdersScreen — detail and void', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Back' }))
     expect(await screen.findByText('No orders yet today.')).toBeInTheDocument()
   })
+
+  it('a voided order with a non-string voidReason is skipped from the list, logged once, and counted in the footer (never crashes)', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    await database.orders.add(makeOrder({ id: 'o-good', number: 1 }))
+    await database.orders.add(
+      makeOrder({
+        id: 'o-bad',
+        number: 2,
+        status: 'voided',
+        // @ts-expect-error deliberately corrupt voidReason for the test
+        voidReason: { note: 'not a string' },
+      }),
+    )
+
+    render(<OrdersScreen database={database} />)
+
+    expect(await screen.findByRole('button', { name: /#1/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /#2/ })).not.toBeInTheDocument()
+    expect(await screen.findByText("1 order couldn't be displayed.")).toBeInTheDocument()
+    expect(errorSpy).toHaveBeenCalled()
+  })
+
+  it('"Try again" resets the open detail back to the list, so a still-crashing order does not loop forever', async () => {
+    // Forces the detail (specifically) to throw via a mock, standing in for
+    // "some unforeseen crash cause `isValidOrder` doesn't yet check for" —
+    // the one *known* cause (a non-string voidReason) is now caught by
+    // `isValidOrder` itself (see the test above), so this exercises the
+    // retry-reset as a defense-in-depth measure independent of that fix.
+    // `lineTotal` is only ever called from the detail's line list, never
+    // from a list row, which is what makes this test meaningful: if "Try
+    // again" merely remounted the boundary without also clearing
+    // `selectedId`, it would try to re-render the same detail and crash
+    // again identically — indistinguishable from success unless the retry
+    // actually lands somewhere that doesn't call `lineTotal` at all.
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    await database.orders.add(makeOrder({ id: 'o-1', number: 1 }))
+    const moneyModule = await import('../domain/money')
+    const lineTotalSpy = vi.spyOn(moneyModule, 'lineTotal').mockImplementation(() => {
+      throw new Error('boom (test)')
+    })
+
+    render(<OrdersScreen database={database} />)
+    fireEvent.click(await screen.findByRole('button', { name: /#1/ }))
+    expect(await screen.findByText(/something went wrong/i)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /try again/i }))
+
+    // Back at the list (never another crash) — proof `selectedId` was
+    // cleared, since the mock is still throwing and would crash the detail
+    // again immediately if `onRetry` had reopened it.
+    expect(await screen.findByRole('button', { name: /^#1/ })).toBeInTheDocument()
+    expect(screen.queryByText(/something went wrong/i)).not.toBeInTheDocument()
+
+    lineTotalSpy.mockRestore()
+    errorSpy.mockRestore()
+  })
+
+  it('a stale void-failure alert is cleared once the panel is closed and reopened', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    await completeOrder([croissant], { method: 'cash', tendered: 5500, change: 0 }, database)
+    const updateSpy = vi
+      .spyOn(database.orders, 'update')
+      .mockRejectedValueOnce(new Error('disk full'))
+
+    render(<OrdersScreen database={database} />)
+    fireEvent.click(await screen.findByRole('button', { name: /#1/ }))
+    await screen.findByRole('heading', { name: /Order #1/ })
+    fireEvent.click(screen.getByRole('button', { name: 'Void this order' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Duplicate order' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, void' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(/couldn't void/i)
+    updateSpy.mockRestore()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Keep order' }))
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Void this order' }))
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('deleting the order while the void panel is open shows the unavailable message, and does not crash', async () => {
+    const order = await completeOrder(
+      [croissant],
+      { method: 'cash', tendered: 5500, change: 0 },
+      database,
+    )
+    render(<OrdersScreen database={database} />)
+    fireEvent.click(await screen.findByRole('button', { name: /#1/ }))
+    await screen.findByRole('heading', { name: /Order #1/ })
+    fireEvent.click(screen.getByRole('button', { name: 'Void this order' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Duplicate order' }))
+
+    await database.orders.delete(order.id)
+
+    expect(await screen.findByText('This order is no longer available.')).toBeInTheDocument()
+  })
+
+  it('shows the stored total even when it disagrees with the sum of the lines', async () => {
+    await database.orders.add(makeOrder({ id: 'o-1', number: 1, lines: [croissant], total: 20000 }))
+    render(<OrdersScreen database={database} />)
+    fireEvent.click(await screen.findByRole('button', { name: /#1/ }))
+
+    // croissant alone sums to ฿55 — the detail must never recompute this.
+    expect(await screen.findByText('Total ฿200')).toBeInTheDocument()
+    expect(screen.queryByText('Total ฿55')).not.toBeInTheDocument()
+  })
 })

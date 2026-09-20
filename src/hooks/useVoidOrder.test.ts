@@ -91,4 +91,58 @@ describe('useVoidOrder', () => {
     const stored = await database.orders.get(order.id)
     expect(stored?.status).toBe('completed')
   })
+
+  it('calls onSuccess synchronously with pending returning to false, not on failure', async () => {
+    const order = await completeOrder(lines, exactCash, database)
+    const onSuccess = vi.fn()
+    const { result } = renderHook(() => useVoidOrder(database, onSuccess))
+
+    act(() => result.current.voidOrder(order.id, 'reason'))
+    expect(onSuccess).not.toHaveBeenCalled()
+
+    await waitFor(() => expect(result.current.pending).toBe(false))
+    expect(onSuccess).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not call onSuccess when the void rejects', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const onSuccess = vi.fn()
+    const { result } = renderHook(() => useVoidOrder(database, onSuccess))
+
+    act(() => result.current.voidOrder('unknown-id', 'reason'))
+    await waitFor(() => expect(result.current.error).not.toBeNull())
+
+    expect(onSuccess).not.toHaveBeenCalled()
+  })
+
+  it('onSuccess fires in the same update as pending returning to false, letting a caller close the void panel before a second tap could land in the gap before the live query re-emits', async () => {
+    const order = await completeOrder(lines, exactCash, database)
+    let panelOpen = true
+    const onSuccess = vi.fn(() => {
+      panelOpen = false
+    })
+    const { result } = renderHook(() => useVoidOrder(database, onSuccess))
+
+    act(() => result.current.voidOrder(order.id, 'first'))
+    await waitFor(() => expect(result.current.pending).toBe(false))
+
+    // Not "eventually" — checked in the same assertion pass as `pending`
+    // going false, since that's the exact moment a stray second tap on
+    // "Yes, void" would otherwise still find the button enabled.
+    expect(panelOpen).toBe(false)
+    expect(onSuccess).toHaveBeenCalledTimes(1)
+  })
+
+  it('reset() clears a stale error without attempting anything', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { result } = renderHook(() => useVoidOrder(database))
+
+    act(() => result.current.voidOrder('unknown-id', 'reason'))
+    await waitFor(() => expect(result.current.error).not.toBeNull())
+
+    act(() => result.current.reset())
+    expect(result.current.error).toBeNull()
+    expect(result.current.pending).toBe(false)
+    expect(await database.orders.count()).toBe(0)
+  })
 })
