@@ -148,6 +148,41 @@ describe('useShareFiles — the download fallback', () => {
     expect(decodeURIComponent(link.href.split(',').slice(1).join(','))).toBe(FILES[1].text)
   })
 
+  it('forgets the last share when cleared', async () => {
+    const { revoke } = installObjectUrls()
+    installNavigatorApi('share', vi.fn().mockResolvedValue(undefined))
+    installNavigatorApi('canShare', vi.fn().mockReturnValue(true))
+
+    const { result } = renderHook(() => useShareFiles())
+    await act(async () => {
+      result.current.share(FILES)
+    })
+    expect(result.current.shared).toBe(true)
+
+    act(() => {
+      result.current.clear()
+    })
+
+    expect(result.current.shared).toBe(false)
+    expect(result.current.downloads).toEqual([])
+    expect(revoke).not.toHaveBeenCalled() // nothing was created; the sheet took it
+  })
+
+  it('releases fallback links when cleared', () => {
+    const { revoke } = installObjectUrls()
+
+    const { result } = renderHook(() => useShareFiles())
+    act(() => {
+      result.current.share(FILES)
+    })
+    act(() => {
+      result.current.clear()
+    })
+
+    expect(result.current.downloads).toEqual([])
+    expect(revoke).toHaveBeenCalledTimes(2)
+  })
+
   it('does nothing at all when handed no files', () => {
     const { result } = renderHook(() => useShareFiles())
 

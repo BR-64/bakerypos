@@ -25,6 +25,12 @@ export interface ShareFiles {
   shared: boolean
   /** Non-empty when the sheet wasn't usable: download links, rendered instead. */
   downloads: DownloadLink[]
+  /**
+   * Forget the last share: no "Shared", no links. For when the screen
+   * moves on to something else, so a stale confirmation can't sit above
+   * an unrelated result and be read as belonging to it.
+   */
+  clear: () => void
 }
 
 /** Whether a rejection is the person simply dismissing the share sheet. */
@@ -101,11 +107,15 @@ export function useShareFiles(): ShareFiles {
     [revoke],
   )
 
+  const clear = useCallback(() => {
+    setShared(false)
+    revoke()
+    setDownloads([])
+  }, [revoke])
+
   const share = useCallback(
     (files: ShareFile[]) => {
-      setShared(false)
-      revoke()
-      setDownloads([])
+      clear()
       if (files.length === 0) return
 
       const webShare = typeof navigator === 'undefined' ? undefined : navigator.share
@@ -147,8 +157,8 @@ export function useShareFiles(): ShareFiles {
         },
       )
     },
-    [offerDownloads, revoke],
+    [clear, offerDownloads],
   )
 
-  return { share, shared, downloads }
+  return { share, shared, downloads, clear }
 }

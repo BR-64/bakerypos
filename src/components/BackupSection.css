@@ -49,3 +49,29 @@
   border-radius: 8px;
   background: var(--bg);
 }
+
+/* The whole row is the tap target, not just the box. */
+.backup-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: var(--tap);
+  margin: 8px 0;
+  font-weight: 600;
+  touch-action: manipulation;
+}
+
+.backup-checkbox {
+  width: 24px;
+  height: 24px;
+  flex: none;
+  accent-color: var(--accent);
+}
+
+.backup-changes {
+  margin: 0 0 12px;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}

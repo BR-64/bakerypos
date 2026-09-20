@@ -11,10 +11,13 @@ import {
   buildOrdersCsv,
   ordersCsvFileName,
   parseImport,
+  MAX_IMPORT_BYTES,
+  TOO_LARGE_MESSAGE,
   UTF8_BOM,
   type BackupPayload,
 } from '../domain/backup'
 import { safeString } from '../domain/log'
+import { formatBaht } from '../domain/money'
 import { useShareFiles } from '../hooks/useShareFiles'
 
 export interface BackupSectionProps {
@@ -38,6 +41,26 @@ function plural(count: number, one: string, many = `${one}s`): string {
   return `${count} ${count === 1 ? one : many}`
 }
 
+/** "a", "a and b", "a, b and c" — for the Import button's honest label. */
+function listed(parts: string[]): string {
+  if (parts.length <= 1) return parts.join('')
+  return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`
+}
+
+/**
+ * The warning for imported orders that would repeat a number already used
+ * here. Built as one string so the sentence reads as one sentence to a
+ * screen reader, and so the grammar survives a count of exactly one.
+ */
+function collisionNote(count: number): string {
+  return `${plural(count, 'imported order')} ${count === 1 ? 'shares' : 'share'} a number with an order already on this phone. Both are kept, so two receipts will show the same number.`
+}
+
+/** Whether this file would change anything outside the orders table. */
+function hasDetailChanges(summary: ImportSummary): boolean {
+  return summary.settingsChanges.length > 0 || summary.changedProducts > 0
+}
+
 /**
  * Admin → Backup: take the whole shop off the phone as a file, and merge
  * one back.
@@ -50,7 +73,9 @@ function plural(count: number, one: string, many = `${one}s`): string {
  * The export data is loaded and held ready rather than fetched on the tap,
  * because `navigator.share` has to be called inside the gesture — see
  * `useShareFiles`. An import, by contrast, is deliberately two taps:
- * choose the file, read the summary, *then* apply it.
+ * choose the file, read exactly what it would change — including the shop
+ * settings and the prices on the Sell grid, which are opt-in — and *then*
+ * apply it.
  */
 export function BackupSection({ database = db }: BackupSectionProps) {
   const data = useLiveQuery(async () => {
@@ -66,6 +91,7 @@ export function BackupSection({ database = db }: BackupSectionProps) {
   const [exportNote, setExportNote] = useState<string | null>(null)
   const [importError, setImportError] = useState<string | null>(null)
   const [pending, setPending] = useState<PendingImport | null>(null)
+  const [replaceDetails, setReplaceDetails] = useState(false)
   const [result, setResult] = useState<ImportSummary | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -73,12 +99,15 @@ export function BackupSection({ database = db }: BackupSectionProps) {
     if (data === undefined) return
     const now = new Date()
     const payload = buildExport(data, now)
-    const skipped =
-      data.products.length - payload.products.length + (data.orders.length - payload.orders.length)
+    const missed: string[] = []
+    const products = data.products.length - payload.products.length
+    const orders = data.orders.length - payload.orders.length
+    if (products > 0) missed.push(plural(products, 'product'))
+    if (orders > 0) missed.push(plural(orders, 'order'))
     setExportNote(
-      skipped > 0
-        ? `${plural(skipped, 'record')} couldn’t be included — they’re too corrupt to read back.`
-        : null,
+      missed.length === 0
+        ? null
+        : `${listed(missed)} couldn’t be included — too corrupt to read back. They are still on this phone.`,
     )
     // Synchronous, inside the tap.
     share.share([
@@ -100,7 +129,16 @@ export function BackupSection({ database = db }: BackupSectionProps) {
     setImportError(null)
     setResult(null)
     setPending(null)
+    // An export's confirmation must not be left hanging over an import.
+    setExportNote(null)
+    share.clear()
     if (file === undefined) return
+    // Before `text()`: reading a gigabyte into memory is a kill no
+    // `try`/`catch` of ours can catch.
+    if (file.size > MAX_IMPORT_BYTES) {
+      setImportError(TOO_LARGE_MESSAGE)
+      return
+    }
     setBusy(true)
     try {
       const parsed = parseImport(await file.text())
@@ -108,11 +146,9 @@ export function BackupSection({ database = db }: BackupSectionProps) {
         setImportError(parsed.error)
         return
       }
-      setPending({
-        fileName: file.name,
-        payload: parsed.payload,
-        summary: await previewImport(parsed.payload, database),
-      })
+      const summary = await previewImport(parsed.payload, database)
+      setReplaceDetails(summary.replaceDetailsByDefault)
+      setPending({ fileName: file.name, payload: parsed.payload, summary })
     } catch (thrown) {
       setImportError(message(thrown, "Couldn't read that file"))
     } finally {
@@ -125,7 +161,7 @@ export function BackupSection({ database = db }: BackupSectionProps) {
     setBusy(true)
     setImportError(null)
     try {
-      const summary = await importBackup(pending.payload, database)
+      const summary = await importBackup(pending.payload, database, { replaceDetails })
       setResult(summary)
       setPending(null)
     } catch (thrown) {
@@ -133,6 +169,14 @@ export function BackupSection({ database = db }: BackupSectionProps) {
     } finally {
       setBusy(false)
     }
+  }
+
+  function importLabel(summary: ImportSummary): string {
+    const parts: string[] = []
+    if (summary.newOrders > 0) parts.push(plural(summary.newOrders, 'order'))
+    if (summary.newProducts > 0) parts.push(plural(summary.newProducts, 'product'))
+    if (replaceDetails && hasDetailChanges(summary)) parts.push('the shop details')
+    return parts.length === 0 ? 'Nothing to import' : `Import ${listed(parts)}`
   }
 
   return (
@@ -154,7 +198,8 @@ export function BackupSection({ database = db }: BackupSectionProps) {
       </div>
       {share.shared && <p className="admin-message muted">Shared.</p>}
       {exportNote !== null && (
-        <p className="admin-message muted" role="status">
+        // An alert, not a muted aside: this is money missing from the file.
+        <p className="checkout-error" role="alert">
           {exportNote}
         </p>
       )}
@@ -203,6 +248,51 @@ export function BackupSection({ database = db }: BackupSectionProps) {
             {plural(pending.summary.orders, 'order')} — {pending.summary.newOrders} new,{' '}
             {pending.summary.existingOrders} already here.
           </p>
+
+          {pending.summary.numberCollisions > 0 && (
+            <p className="admin-message">{collisionNote(pending.summary.numberCollisions)}</p>
+          )}
+
+          {hasDetailChanges(pending.summary) ? (
+            <>
+              <label className="backup-option">
+                <input
+                  type="checkbox"
+                  className="backup-checkbox"
+                  checked={replaceDetails}
+                  disabled={busy}
+                  onChange={(event) => setReplaceDetails(event.target.checked)}
+                />
+                <span>Also replace shop settings and product details</span>
+              </label>
+              <p className="admin-message muted">
+                Orders are merged either way. Leave this off to keep what is on this phone now.
+              </p>
+              <ul className="backup-changes">
+                {pending.summary.settingsChanges.map((change) => (
+                  <li key={change.field}>
+                    {change.field}: {change.from} → {change.to}
+                  </li>
+                ))}
+                {pending.summary.changedProducts > 0 && (
+                  <li>
+                    {plural(pending.summary.changedProducts, 'product')} already here would be
+                    replaced.
+                  </li>
+                )}
+                {pending.summary.priceChanges.map((change) => (
+                  <li key={change.id}>
+                    {change.name}: {formatBaht(change.from)} → {formatBaht(change.to)}
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : (
+            <p className="admin-message muted">
+              The shop settings and product details on this phone already match the file.
+            </p>
+          )}
+
           <div className="admin-actions">
             <button
               type="button"
@@ -215,21 +305,44 @@ export function BackupSection({ database = db }: BackupSectionProps) {
             <button
               type="button"
               className="admin-primary-button"
-              disabled={busy}
+              disabled={busy || importLabel(pending.summary) === 'Nothing to import'}
               onClick={() => void apply()}
             >
-              Import {pending.summary.newOrders} new
+              {importLabel(pending.summary)}
             </button>
           </div>
         </div>
       )}
 
       {result !== null && (
-        <p className="admin-message" role="status">
-          Imported {plural(result.newOrders, 'order')} and {plural(result.products, 'product')}.{' '}
-          {result.existingOrders} order{result.existingOrders === 1 ? ' was' : 's were'} already
-          here and stayed as they were.
-        </p>
+        <div role="status">
+          <p className="admin-message">
+            Imported {plural(result.newOrders, 'order')} and {plural(result.newProducts, 'product')}
+            .
+          </p>
+          {result.existingOrders > 0 && (
+            <p className="admin-message">
+              {plural(result.existingOrders, 'order')} already here were left as they are.
+            </p>
+          )}
+          {result.changedProducts > 0 && (
+            <p className="admin-message">
+              {result.replacedProducts > 0
+                ? `${plural(result.replacedProducts, 'product')} already here replaced.`
+                : `${plural(result.changedProducts, 'product')} already here left as they are.`}
+            </p>
+          )}
+          {result.settingsChanges.length > 0 && (
+            <p className="admin-message">
+              {result.settingsApplied
+                ? 'Shop settings updated.'
+                : 'Shop settings left as they were on this phone.'}
+            </p>
+          )}
+          {result.numberCollisions > 0 && (
+            <p className="admin-message">{collisionNote(result.numberCollisions)}</p>
+          )}
+        </div>
       )}
     </section>
   )

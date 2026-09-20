@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PosDatabase } from '../db/db'
 import { saveSettings } from '../db/settings'
+import { MAX_IMPORT_BYTES, TOO_LARGE_MESSAGE } from '../domain/backup'
 import { DEFAULT_SETTINGS, SETTINGS_ID, type Settings } from '../domain/settings'
 import type { Order, Product } from '../domain/types'
 import { BackupSection } from './BackupSection'
@@ -109,6 +110,19 @@ describe('BackupSection — export', () => {
     expect(csv).toContain('1,09:05,Croissant,2,55.00,110.00,cash,completed')
   })
 
+  it('raises an alert naming what could not be included, product and order apart', async () => {
+    // Written straight to the tables, the way a half-corrupted record
+    // would actually arrive.
+    await database.products.add({ ...croissant, id: 'p-bad', price: 12.5 } as Product)
+    await database.orders.add({ ...cashOrder, id: 'o-bad', total: 999 })
+
+    fireEvent.click(await renderBackup())
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent(/1 product and 1 order/)
+    expect(alert).toHaveTextContent(/still on this phone/)
+  })
+
   it('offers download links when the phone cannot share files', async () => {
     fireEvent.click(await renderBackup())
 
@@ -120,47 +134,138 @@ describe('BackupSection — export', () => {
 })
 
 describe('BackupSection — import', () => {
-  /** A file holding one product and one order this device has never seen. */
-  function otherShopBackup(): string {
+  /**
+   * An older backup of this same shop: one product this phone has never
+   * seen, one order it hasn't either, the croissant at the price it used
+   * to be, and the PromptPay account the shop has since left.
+   */
+  function olderBackup(): string {
     return JSON.stringify({
       format: 'bakery-pos-backup',
       version: 1,
       exportedAt: new Date().toISOString(),
       dayKey: '2026-09-20',
-      products: [{ ...croissant, id: 'p-tart', name: 'Egg tart', price: 4500 }],
+      products: [
+        { ...croissant, id: 'p-tart', name: 'Egg tart', price: 4500 },
+        { ...croissant, price: 4500 },
+      ],
       orders: [{ ...cashOrder, id: 'o-new', number: 7 }],
       settings: { shopName: 'Other Bakery', promptPayId: '0899999999', categoryOrder: [] },
     })
   }
 
-  it('shows what the file would do before writing anything, then merges on confirm', async () => {
+  it('spells out every change outside the orders table before writing anything', async () => {
     await renderBackup()
 
-    choose(backupFile(otherShopBackup()))
+    choose(backupFile(olderBackup()))
 
     expect(
-      await screen.findByText(/1 product, 1 order — 1 new, 0 already here/),
+      await screen.findByText(/2 products, 1 order — 1 new, 0 already here/),
     ).toBeInTheDocument()
+    // Every detail change, with the value it would replace.
+    expect(screen.getByText('Shop name: Sunrise Bakery → Other Bakery')).toBeInTheDocument()
+    expect(screen.getByText('PromptPay ID: 0812345678 → 0899999999')).toBeInTheDocument()
+    expect(screen.getByText(/1 product already here would be replaced/)).toBeInTheDocument()
+    expect(screen.getByText('Croissant: ฿55 → ฿45')).toBeInTheDocument()
     // Nothing written yet: the summary comes first.
     await expect(database.orders.count()).resolves.toBe(1)
+  })
 
-    fireEvent.click(screen.getByRole('button', { name: 'Import 1 new' }))
+  it('merges the orders without touching the settings or the price when the box is left unticked', async () => {
+    await renderBackup()
+
+    choose(backupFile(olderBackup()))
+    const box = await screen.findByRole('checkbox', {
+      name: 'Also replace shop settings and product details',
+    })
+    // This phone already has settings and one of the file's products, so
+    // replacing details is opt-in.
+    expect(box).not.toBeChecked()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Import 1 order and 1 product' }))
 
     expect(await screen.findByText(/Imported 1 order and 1 product/)).toBeInTheDocument()
+    // The orders merged…
     await expect(database.orders.count()).resolves.toBe(2)
     await expect(database.orders.get('o-new')).resolves.toMatchObject({ number: 7 })
     await expect(database.products.get('p-tart')).resolves.toMatchObject({ name: 'Egg tart' })
-    // The shop fields moved; the PIN did not.
+    // …while the till still charges ฿55 and still pays the current account.
+    await expect(database.products.get('p-croissant')).resolves.toMatchObject({ price: 5500 })
     await expect(database.settings.get(SETTINGS_ID)).resolves.toMatchObject({
-      shopName: 'Other Bakery',
+      shopName: 'Sunrise Bakery',
+      promptPayId: '0812345678',
       ...pin,
     })
+    expect(screen.getByText(/Shop settings left as they were/)).toBeInTheDocument()
+  })
+
+  it('applies the settings and the price when the box is ticked', async () => {
+    await renderBackup()
+
+    choose(backupFile(olderBackup()))
+    fireEvent.click(
+      await screen.findByRole('checkbox', {
+        name: 'Also replace shop settings and product details',
+      }),
+    )
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Import 1 order, 1 product and the shop details' }),
+    )
+
+    expect(await screen.findByText(/Shop settings updated/)).toBeInTheDocument()
+    await expect(database.products.get('p-croissant')).resolves.toMatchObject({ price: 4500 })
+    await expect(database.orders.count()).resolves.toBe(2)
+    // The PIN is untouched either way.
+    await expect(database.settings.get(SETTINGS_ID)).resolves.toMatchObject({
+      shopName: 'Other Bakery',
+      promptPayId: '0899999999',
+      ...pin,
+    })
+  })
+
+  it('warns that an imported order would repeat a number already on this phone', async () => {
+    await renderBackup()
+    const file = JSON.parse(olderBackup()) as { orders: { number: number }[] }
+    file.orders[0].number = cashOrder.number
+
+    choose(backupFile(JSON.stringify(file)))
+
+    expect(
+      await screen.findByText(
+        /1 imported order shares a number with an order already on this phone/,
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it('clears the export confirmation, so it cannot be read as the import’s result', async () => {
+    installNavigatorApi('share', vi.fn().mockResolvedValue(undefined))
+    installNavigatorApi('canShare', vi.fn().mockReturnValue(true))
+    fireEvent.click(await renderBackup())
+    expect(await screen.findByText('Shared.')).toBeInTheDocument()
+
+    choose(backupFile(olderBackup()))
+
+    expect(await screen.findByRole('button', { name: /^Import/ })).toBeInTheDocument()
+    expect(screen.queryByText('Shared.')).not.toBeInTheDocument()
+  })
+
+  it('refuses a file too big to read before it is read at all', async () => {
+    await renderBackup()
+    const huge = backupFile('{}')
+    Object.defineProperty(huge, 'size', { value: MAX_IMPORT_BYTES + 1 })
+    const text = vi.spyOn(huge, 'text')
+
+    choose(huge)
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(TOO_LARGE_MESSAGE)
+    // Never read into memory: a gigabyte here is an out-of-memory kill.
+    expect(text).not.toHaveBeenCalled()
   })
 
   it('leaves the database alone when the import is cancelled', async () => {
     await renderBackup()
 
-    choose(backupFile(otherShopBackup()))
+    choose(backupFile(olderBackup()))
     fireEvent.click(await screen.findByRole('button', { name: 'Cancel import' }))
 
     await waitFor(() =>
@@ -172,7 +277,7 @@ describe('BackupSection — import', () => {
   it('explains a corrupt file and offers no way to import it', async () => {
     await renderBackup()
 
-    const corrupt = JSON.parse(otherShopBackup()) as { orders: { total: number }[] }
+    const corrupt = JSON.parse(olderBackup()) as { orders: { total: number }[] }
     corrupt.orders[0].total = 1
     choose(backupFile(JSON.stringify(corrupt)))
 
