@@ -53,6 +53,25 @@ export function formatBahtInput(satang: Satang): string {
   return rem === 0 ? String(baht) : `${baht}.${String(rem).padStart(2, '0')}`
 }
 
+/**
+ * Satang as a plain two-decimal baht string for a spreadsheet cell:
+ * `4550` -> `"45.50"`, `4500` -> `"45.00"`. No `฿`, no thousands
+ * separators, and — unlike `formatBaht`/`formatBahtInput` — the satang are
+ * always both shown, because a CSV column of mixed `45` and `45.50` is a
+ * column a spreadsheet may read as text.
+ *
+ * Integer arithmetic only (`Math.floor`/`%`), never `satang / 100`, so no
+ * money is ever rounded through a float on the way out. A value that isn't
+ * safe-integer satang returns `''` rather than a guess — an empty cell is
+ * obviously wrong to a human, `NaN` or `0` is not.
+ */
+export function formatBahtDecimal(satang: Satang): string {
+  if (!Number.isSafeInteger(satang)) return ''
+  const sign = satang < 0 ? '-' : ''
+  const abs = Math.abs(satang)
+  return `${sign}${Math.floor(abs / 100)}.${String(abs % 100).padStart(2, '0')}`
+}
+
 export function lineTotal(line: Pick<CartLine, 'unitPrice' | 'qty'>): Satang {
   return line.unitPrice * line.qty
 }

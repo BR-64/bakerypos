@@ -4,6 +4,7 @@ import {
   cartTotal,
   changeDue,
   formatBaht,
+  formatBahtDecimal,
   formatBahtInput,
   parseBahtInput,
   quickTenderOptions,
@@ -100,5 +101,31 @@ describe('formatBahtInput', () => {
     expect(formatBahtInput(-1)).toBe('')
     expect(formatBahtInput(Number.NaN)).toBe('')
     expect(formatBahtInput(1e18)).toBe('')
+  })
+})
+
+describe('formatBahtDecimal', () => {
+  it('always shows both satang digits, with no symbol or separators', () => {
+    expect(formatBahtDecimal(5500)).toBe('55.00')
+    expect(formatBahtDecimal(4550)).toBe('45.50')
+    expect(formatBahtDecimal(105)).toBe('1.05')
+    expect(formatBahtDecimal(0)).toBe('0.00')
+    expect(formatBahtDecimal(123456700)).toBe('1234567.00')
+  })
+
+  it('round-trips back to the same satang', () => {
+    for (const satang of [0, 5, 4500, 4550, 12000, 123456700]) {
+      expect(parseBahtInput(formatBahtDecimal(satang))).toBe(satang)
+    }
+  })
+
+  it('returns an empty string rather than a guess for money it cannot show', () => {
+    expect(formatBahtDecimal(45.5)).toBe('')
+    expect(formatBahtDecimal(Number.NaN)).toBe('')
+    expect(formatBahtDecimal(1e18)).toBe('')
+  })
+
+  it('keeps the sign on a negative amount', () => {
+    expect(formatBahtDecimal(-4550)).toBe('-45.50')
   })
 })
