@@ -28,13 +28,6 @@ export const MAX_IMAGE_EDGE = 512
 export const MAX_IMAGE_BYTES = 200 * 1024
 
 /**
- * What a re-encode aims for. Lower than the cap so the usual case has
- * headroom and only a genuinely pathological photo needs the quality
- * ladder in `resizeImageFile`.
- */
-export const TARGET_IMAGE_BYTES = 120 * 1024
-
-/**
  * Biggest file we will even try to decode. A 3–5 MB phone photo is the
  * normal case; a 60 MB scan is someone picking the wrong file, and
  * decoding it is an out-of-memory kill no `try`/`catch` of ours can catch
