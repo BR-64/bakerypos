@@ -45,6 +45,14 @@ total. Shareable as plain text (Web Share API / copy to clipboard).
 **Admin.** Product list: add, edit name/price/category, toggle out of stock, archive. Shop
 settings: shop name, PromptPay ID (phone or national ID), category order.
 
+**PIN lock.** The Admin screen is behind a 4–6 digit PIN so a customer or new staff member
+can't edit prices on an unattended phone. The PIN is set the first time Admin is opened
+(no default PIN). It is stored in the `settings` table as a salted SHA-256 hash via the
+Web Crypto API, never in plain text. Entering the PIN unlocks Admin for 5 minutes or until
+the app is closed. Five wrong attempts lock the prompt for 60 seconds. Forgotten PIN: there is no cloud to
+recover from, so Admin shows a one-time recovery code when the PIN is set; entering it resets
+the PIN. Sell, Cart, checkout and Report never ask for a PIN.
+
 ## Data model
 
 See `src/domain/types.ts`. Key decisions:
