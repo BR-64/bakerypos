@@ -27,7 +27,7 @@ const fixtures: Product[] = [
     id: 'p-cookie',
     name: 'Cookie',
     price: 4000,
-    category: 'pastry',
+    category: 'cookies',
     sortOrder: 3,
     outOfStock: false,
     archived: false,
@@ -36,7 +36,7 @@ const fixtures: Product[] = [
     id: 'p-croissant',
     name: 'Croissant',
     price: 5500,
-    category: 'pastry',
+    category: 'cookies',
     sortOrder: 1,
     outOfStock: false,
     archived: false,
@@ -45,7 +45,7 @@ const fixtures: Product[] = [
     id: 'p-old-cake',
     name: 'Discontinued Cake',
     price: 7500,
-    category: 'cake',
+    category: 'jar',
     sortOrder: 2,
     outOfStock: false,
     archived: true,
@@ -54,7 +54,7 @@ const fixtures: Product[] = [
     id: 'p-sourdough',
     name: 'Sourdough Loaf',
     price: 12000,
-    category: 'bread',
+    category: 'brownies',
     sortOrder: 4,
     outOfStock: true,
     archived: false,
@@ -81,7 +81,7 @@ describe('sellableProducts', () => {
       id: 'p-bad-sort',
       name: 'Mystery Muffin',
       price: 3000,
-      category: 'pastry',
+      category: 'cookies',
       outOfStock: false,
       archived: false,
       // sortOrder intentionally omitted — simulates a corrupted record.
@@ -99,7 +99,7 @@ describe('sellableProducts', () => {
       id: 'p-string-archived',
       name: 'Odd Item',
       price: 1000,
-      category: 'pastry',
+      category: 'cookies',
       sortOrder: 99,
       outOfStock: false,
       archived: 'false',
@@ -136,14 +136,14 @@ describe('createProduct', () => {
     await database.products.bulkAdd(fixtures)
 
     const created = await createProduct(
-      { name: '  Almond Croissant  ', price: 6500, category: 'pastry' },
+      { name: '  Almond Croissant  ', price: 6500, category: 'cookies' },
       database,
     )
 
     expect(created).toMatchObject({
       name: 'Almond Croissant',
       price: 6500,
-      category: 'pastry',
+      category: 'cookies',
       sortOrder: 5,
       outOfStock: false,
       archived: false,
@@ -162,24 +162,24 @@ describe('createProduct', () => {
       archived: false,
     } as unknown as Product)
 
-    const first = await createProduct({ name: 'A', price: 100, category: 'bread' }, database)
-    const second = await createProduct({ name: 'B', price: 100, category: 'bread' }, database)
+    const first = await createProduct({ name: 'A', price: 100, category: 'brownies' }, database)
+    const second = await createProduct({ name: 'B', price: 100, category: 'brownies' }, database)
 
     expect(second.sortOrder).toBeGreaterThan(first.sortOrder)
   })
 
   it('rejects values that could never be a valid product, writing nothing', async () => {
     await expect(
-      createProduct({ name: '  ', price: 100, category: 'bread' }, database),
+      createProduct({ name: '  ', price: 100, category: 'brownies' }, database),
     ).rejects.toThrow()
     await expect(
-      createProduct({ name: 'A', price: 10.5, category: 'bread' }, database),
+      createProduct({ name: 'A', price: 10.5, category: 'brownies' }, database),
     ).rejects.toThrow()
     await expect(
-      createProduct({ name: 'A', price: -1, category: 'bread' }, database),
+      createProduct({ name: 'A', price: -1, category: 'brownies' }, database),
     ).rejects.toThrow()
     await expect(
-      createProduct({ name: 'A', price: 1e18, category: 'bread' }, database),
+      createProduct({ name: 'A', price: 1e18, category: 'brownies' }, database),
     ).rejects.toThrow()
     await expect(
       // @ts-expect-error deliberately bad category
@@ -195,7 +195,7 @@ describe('updateProduct', () => {
 
     await updateProduct(
       'p-sourdough',
-      { name: 'Rye Loaf', price: 13000, category: 'bread' },
+      { name: 'Rye Loaf', price: 13000, category: 'brownies' },
       database,
     )
 
@@ -203,7 +203,7 @@ describe('updateProduct', () => {
       id: 'p-sourdough',
       name: 'Rye Loaf',
       price: 13000,
-      category: 'bread',
+      category: 'brownies',
       sortOrder: 4,
       outOfStock: true,
       archived: false,
@@ -220,7 +220,7 @@ describe('updateProduct', () => {
 
     await updateProduct(
       'p-croissant',
-      { name: 'Butter Croissant', price: 9900, category: 'pastry' },
+      { name: 'Butter Croissant', price: 9900, category: 'cookies' },
       database,
     )
 
@@ -238,10 +238,10 @@ describe('updateProduct', () => {
     await database.products.bulkAdd(fixtures)
 
     await expect(
-      updateProduct('p-nope', { name: 'X', price: 100, category: 'bread' }, database),
+      updateProduct('p-nope', { name: 'X', price: 100, category: 'brownies' }, database),
     ).rejects.toThrow('no longer exists')
     await expect(
-      updateProduct('p-cookie', { name: 'X', price: 1.5, category: 'bread' }, database),
+      updateProduct('p-cookie', { name: 'X', price: 1.5, category: 'brownies' }, database),
     ).rejects.toThrow()
     expect((await database.products.get('p-cookie'))?.price).toBe(4000)
   })

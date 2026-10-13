@@ -10,7 +10,7 @@
 
 export type Satang = number
 
-export type Category = 'bread' | 'pastry' | 'cake' | 'drink' | 'other'
+export type Category = 'brownies' | 'cookies' | 'jar' | 'other'
 
 export interface Product {
   id: string

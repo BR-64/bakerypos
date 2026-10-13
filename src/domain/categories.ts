@@ -6,13 +6,12 @@ import type { Category, Product } from './types'
  */
 
 /** Fixed tab order. A later task may make this configurable per shop. */
-export const CATEGORY_ORDER: Category[] = ['bread', 'pastry', 'cake', 'drink', 'other']
+export const CATEGORY_ORDER: Category[] = ['brownies', 'cookies', 'jar', 'other']
 
 const CATEGORY_LABELS: Record<Category, string> = {
-  bread: 'Bread',
-  pastry: 'Pastry',
-  cake: 'Cake',
-  drink: 'Drinks',
+  brownies: 'Brownies',
+  cookies: 'Soft cookies',
+  jar: 'Jar',
   other: 'Other',
 }
 

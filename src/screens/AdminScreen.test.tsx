@@ -37,7 +37,7 @@ const croissant: Product = {
   id: 'p-croissant',
   name: 'Croissant',
   price: 5500,
-  category: 'pastry',
+  category: 'cookies',
   sortOrder: 1,
   outOfStock: false,
   archived: false,
@@ -47,7 +47,7 @@ const latte: Product = {
   id: 'p-latte',
   name: 'Iced Latte',
   price: 7500,
-  category: 'drink',
+  category: 'jar',
   sortOrder: 2,
   outOfStock: true,
   archived: false,
@@ -132,14 +132,14 @@ describe('AdminScreen — products', () => {
       target: { value: 'Almond Croissant' },
     })
     fireEvent.change(screen.getByLabelText('New product price'), { target: { value: '45.50' } })
-    fireEvent.change(screen.getByLabelText('New product category'), { target: { value: 'pastry' } })
+    fireEvent.change(screen.getByLabelText('New product category'), { target: { value: 'cookies' } })
     fireEvent.click(screen.getByRole('button', { name: 'Add product' }))
 
     await waitFor(async () => expect(await database.products.count()).toBe(1))
     const [stored] = await database.products.toArray()
     expect(stored.price).toBe(4550)
     expect(Number.isSafeInteger(stored.price)).toBe(true)
-    expect(stored).toMatchObject({ name: 'Almond Croissant', category: 'pastry', archived: false })
+    expect(stored).toMatchObject({ name: 'Almond Croissant', category: 'cookies', archived: false })
   })
 
   it('refuses a price that is not a plain baht amount, and writes nothing', async () => {
@@ -251,7 +251,7 @@ describe('AdminScreen — products', () => {
         id: 'p-bad',
         name: '',
         price: 'lots',
-        category: 'pastry',
+        category: 'cookies',
         sortOrder: 9,
       } as unknown as Product,
     ])
@@ -324,14 +324,13 @@ describe('AdminScreen — shop settings', () => {
   it('reorders the category tabs and saves it', async () => {
     renderAdmin()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Move Drinks up' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Move Jar up' }))
 
     await waitFor(async () =>
       expect((await getSettings(database)).categoryOrder).toEqual([
-        'bread',
-        'pastry',
-        'drink',
-        'cake',
+        'brownies',
+        'jar',
+        'cookies',
         'other',
       ]),
     )

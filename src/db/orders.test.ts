@@ -118,7 +118,7 @@ describe('completeOrder', () => {
   })
 
   it('keeps the snapshot price even after the product is repriced in the db, between adding to the cart and completing the order', async () => {
-    const seedProduct = seedProducts.find((p) => p.id === 'p-croissant')!
+    const seedProduct = seedProducts.find((p) => p.id === 'p-brownie-9')!
     await database.products.add(seedProduct)
     const originalPrice = seedProduct.price
 
@@ -152,7 +152,7 @@ describe('completeOrder', () => {
   })
 
   it('repricing a product after completeOrder does not change the stored order', async () => {
-    const seedProduct = seedProducts.find((p) => p.id === 'p-croissant')!
+    const seedProduct = seedProducts.find((p) => p.id === 'p-brownie-9')!
     await database.products.add(seedProduct)
     const originalPrice = seedProduct.price
 

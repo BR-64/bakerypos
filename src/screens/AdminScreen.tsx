@@ -502,7 +502,7 @@ function ProductForm({ initial, submitLabel, onCancel, onSubmit }: ProductFormPr
   const [draft, setDraft] = useState<ProductDraft>({
     name: initial?.name ?? '',
     price: initial === undefined ? '' : formatBahtInput(initial.price),
-    category: initial?.category ?? 'pastry',
+    category: initial?.category ?? 'brownies',
   })
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)

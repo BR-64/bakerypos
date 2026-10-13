@@ -106,7 +106,7 @@ export async function saveSettings(
  * The read-modify-write runs inside one `rw` transaction, because it is
  * otherwise a lost-update race between two controls with independent
  * in-flight flags: the owner corrects the PromptPay ID, taps "Save shop
- * settings", then taps "Move Drinks up" before the first resolves — both
+ * settings", then taps "Move Jar up" before the first resolves — both
  * reads see the old row, the reorder's `put` lands last, and the corrected
  * PromptPay ID is written back to the old account. Serialising them means
  * the second read sees the first write. Everything inside is Dexie-only,

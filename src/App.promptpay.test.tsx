@@ -30,10 +30,10 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-async function addCroissantAndOpenPromptPay() {
-  fireEvent.click(await screen.findByRole('button', { name: /Croissant/ }))
+async function addBrownieAndOpenPromptPay() {
+  fireEvent.click(await screen.findByRole('button', { name: /Brownie 9 cubes/ }))
   await waitFor(() => {
-    expect(document.querySelector('.cart-bar-total')?.textContent).toBe('฿55')
+    expect(document.querySelector('.cart-bar-total')?.textContent).toBe('฿300')
   })
   fireEvent.click(screen.getByRole('button', { name: /Cart:/ }))
   await screen.findByRole('heading', { name: 'Cart' })
@@ -44,7 +44,7 @@ async function addCroissantAndOpenPromptPay() {
 describe('App — PromptPay checkout', () => {
   it('goes Sell -> Cart -> PromptPay -> Cancel (to Cart) -> Back to Sell with the cart intact', async () => {
     render(<App database={database} />)
-    await addCroissantAndOpenPromptPay()
+    await addBrownieAndOpenPromptPay()
 
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
 
@@ -52,13 +52,13 @@ describe('App — PromptPay checkout', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Back to Sell' }))
 
     await screen.findByRole('button', { name: /Cart:/ })
-    expect(document.querySelector('.cart-bar-total')?.textContent).toBe('฿55')
+    expect(document.querySelector('.cart-bar-total')?.textContent).toBe('฿300')
     expect(await database.orders.count()).toBe(0)
   })
 
   it('a completed PromptPay sale clears the cart, returns to Sell and shows "Order #N — paid"', async () => {
     render(<App database={database} />)
-    await addCroissantAndOpenPromptPay()
+    await addBrownieAndOpenPromptPay()
 
     fireEvent.click(screen.getByRole('button', { name: 'Paid — done' }))
 
@@ -71,7 +71,7 @@ describe('App — PromptPay checkout', () => {
     expect(bar).toBeDisabled()
 
     const [order] = await database.orders.toArray()
-    expect(order).toMatchObject({ number: 1, total: 5500, payment: { method: 'promptpay' } })
+    expect(order).toMatchObject({ number: 1, total: 30000, payment: { method: 'promptpay' } })
 
     fireEvent.click(screen.getByRole('button', { name: 'Order #1 — paid' }))
     expect(screen.getByRole('status')).toBeEmptyDOMElement()
@@ -91,7 +91,7 @@ describe('App — PromptPay checkout', () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'], shouldAdvanceTime: true })
 
     render(<App database={database} />)
-    await addCroissantAndOpenPromptPay()
+    await addBrownieAndOpenPromptPay()
     fireEvent.click(screen.getByRole('button', { name: 'Paid — done' }))
     await waitFor(() => {
       expect(screen.getByRole('status')).toHaveTextContent('Order #1 — paid')
@@ -101,7 +101,7 @@ describe('App — PromptPay checkout', () => {
       vi.advanceTimersByTime(TAP_SHIELD_MS)
     })
 
-    await addCroissantAndOpenPromptPay()
+    await addBrownieAndOpenPromptPay()
     fireEvent.click(screen.getByRole('button', { name: 'Paid — done' }))
     await waitFor(() => {
       expect(screen.getByRole('status')).toHaveTextContent('Order #2 — paid')
@@ -115,7 +115,7 @@ describe('App — PromptPay checkout', () => {
       throw new Error('fetch should never be called on the checkout path')
     })
     render(<App database={database} />)
-    await addCroissantAndOpenPromptPay()
+    await addBrownieAndOpenPromptPay()
     fireEvent.click(screen.getByRole('button', { name: 'Paid — done' }))
     await waitFor(() => {
       expect(screen.getByRole('status')).toHaveTextContent('Order #1')

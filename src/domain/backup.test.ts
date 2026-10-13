@@ -35,7 +35,7 @@ const croissant: Product = {
   id: 'p-croissant',
   name: 'Croissant',
   price: 5500,
-  category: 'pastry',
+  category: 'cookies',
   sortOrder: 1,
   outOfStock: false,
   archived: false,
@@ -45,7 +45,7 @@ const sourdough: Product = {
   id: 'p-sourdough',
   name: 'Sourdough',
   price: 12000,
-  category: 'bread',
+  category: 'brownies',
   sortOrder: 2,
   outOfStock: true,
   archived: true,
@@ -483,19 +483,19 @@ describe('settingsChanges', () => {
 
   it('reports the shop name and the category order too, with readable labels', () => {
     const changes = settingsChanges(
-      { ...here, categoryOrder: ['bread', 'cake'] },
-      { ...here, shopName: 'Old Name', categoryOrder: ['cake', 'bread'] },
+      { ...here, categoryOrder: ['brownies', 'jar'] },
+      { ...here, shopName: 'Old Name', categoryOrder: ['jar', 'brownies'] },
     )
 
     expect(changes).toEqual([
       { field: 'Shop name', from: 'Sunrise Bakery', to: 'Old Name' },
-      { field: 'Category order', from: 'Bread, Cake', to: 'Cake, Bread' },
+      { field: 'Category order', from: 'Brownies, Jar', to: 'Jar, Brownies' },
     ])
   })
 
   it('is empty when nothing would move', () => {
     expect(
-      settingsChanges({ ...here, categoryOrder: ['bread'] }, { ...here, categoryOrder: ['bread'] }),
+      settingsChanges({ ...here, categoryOrder: ['brownies'] }, { ...here, categoryOrder: ['brownies'] }),
     ).toEqual([])
   })
 })
@@ -508,7 +508,7 @@ describe('sameProduct', () => {
     expect(sameProduct(croissant, { ...croissant, sortOrder: 9 })).toBe(false)
     expect(sameProduct(croissant, { ...croissant, outOfStock: true })).toBe(false)
     expect(sameProduct(croissant, { ...croissant, archived: true })).toBe(false)
-    expect(sameProduct(croissant, { ...croissant, category: 'bread' })).toBe(false)
+    expect(sameProduct(croissant, { ...croissant, category: 'brownies' })).toBe(false)
   })
 })
 

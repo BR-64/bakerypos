@@ -9,7 +9,7 @@ import {
 const draft = (overrides: Partial<ProductDraft> = {}): ProductDraft => ({
   name: 'Croissant',
   price: '55',
-  category: 'pastry',
+  category: 'cookies',
   ...overrides,
 })
 
@@ -17,7 +17,7 @@ describe('validateProductDraft', () => {
   it('turns a good draft into integer satang', () => {
     expect(validateProductDraft(draft())).toEqual({
       ok: true,
-      values: { name: 'Croissant', price: 5500, category: 'pastry' },
+      values: { name: 'Croissant', price: 5500, category: 'cookies' },
     })
   })
 

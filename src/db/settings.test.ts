@@ -201,20 +201,20 @@ describe('updateSettings', () => {
     await saveSettings({ ...real, promptPayId: '0899999999' }, database)
 
     // Exactly what two Admin controls with independent in-flight flags do:
-    // "Save shop settings" is still in flight when "Move Drinks up" is
+    // "Save shop settings" is still in flight when "Move Jar up" is
     // tapped. Without the transaction both reads see the same old row and
     // whichever `put` lands last silently reverts the other's field — the
     // corrected PromptPay ID going back to the old account.
     const first = updateSettings({ promptPayId: '0812345678' }, database)
     const second = updateSettings(
-      { categoryOrder: ['drink', 'bread', 'pastry', 'cake', 'other'] },
+      { categoryOrder: ['jar', 'brownies', 'cookies', 'other'] },
       database,
     )
     await Promise.all([first, second])
 
     const stored = await getSettings(database)
     expect(stored.promptPayId).toBe('0812345678')
-    expect(stored.categoryOrder).toEqual(['drink', 'bread', 'pastry', 'cake', 'other'])
+    expect(stored.categoryOrder).toEqual(['jar', 'brownies', 'cookies', 'other'])
   })
 
   it('keeps the PIN through overlapping edits too', async () => {

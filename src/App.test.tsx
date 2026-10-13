@@ -52,35 +52,35 @@ afterEach(() => {
 })
 
 describe('App', () => {
-  it('seeds the menu, shows the Croissant tile, and updates the cart bar total on tap', async () => {
+  it('seeds the menu, shows the Brownie 9 cubes tile, and updates the cart bar total on tap', async () => {
     render(<App database={database} />)
 
-    const croissantTile = await screen.findByRole('button', { name: /Croissant/ })
-    fireEvent.click(croissantTile)
+    const brownieTile = await screen.findByRole('button', { name: /Brownie 9 cubes/ })
+    fireEvent.click(brownieTile)
 
     await waitFor(() => {
-      expect(document.querySelector('.cart-bar-total')?.textContent).toBe('฿55')
+      expect(document.querySelector('.cart-bar-total')?.textContent).toBe('฿300')
     })
   })
 
   it('goes Sell -> Cart -> (step to 0) -> Back to Sell with an empty, disabled cart bar', async () => {
     render(<App database={database} />)
 
-    const croissantTile = await screen.findByRole('button', { name: /Croissant/ })
-    fireEvent.click(croissantTile)
-    fireEvent.click(croissantTile)
+    const brownieTile = await screen.findByRole('button', { name: /Brownie 9 cubes/ })
+    fireEvent.click(brownieTile)
+    fireEvent.click(brownieTile)
     await waitFor(() => {
-      expect(document.querySelector('.cart-bar-total')?.textContent).toBe('฿110')
+      expect(document.querySelector('.cart-bar-total')?.textContent).toBe('฿600')
     })
 
     fireEvent.click(screen.getByRole('button', { name: /Cart:/ }))
 
     expect(await screen.findByRole('heading', { name: 'Cart' })).toBeInTheDocument()
     expect(document.querySelector('.cart-line-qty')?.textContent).toBe('2')
-    expect(document.querySelector('.cart-bottom-bar-total')?.textContent).toBe('Total ฿110')
+    expect(document.querySelector('.cart-bottom-bar-total')?.textContent).toBe('Total ฿600')
 
-    fireEvent.click(screen.getByRole('button', { name: 'Remove one Croissant' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Remove one Croissant' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Remove one Brownie 9 cubes' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Remove one Brownie 9 cubes' }))
     expect(await screen.findByText('Cart is empty.')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Back to Sell' }))
@@ -92,7 +92,7 @@ describe('App', () => {
 
   it('shows no order confirmation before any sale', async () => {
     render(<App database={database} />)
-    await screen.findByRole('button', { name: /Croissant/ })
+    await screen.findByRole('button', { name: /Brownie 9 cubes/ })
     expect(screen.getByRole('status')).toBeEmptyDOMElement()
   })
 
@@ -102,10 +102,10 @@ describe('App', () => {
     })
     render(<App database={database} />)
 
-    const croissantTile = await screen.findByRole('button', { name: /Croissant/ })
-    fireEvent.click(croissantTile)
+    const brownieTile = await screen.findByRole('button', { name: /Brownie 9 cubes/ })
+    fireEvent.click(brownieTile)
     await waitFor(() => {
-      expect(document.querySelector('.cart-bar-total')?.textContent).toBe('฿55')
+      expect(document.querySelector('.cart-bar-total')?.textContent).toBe('฿300')
     })
     fireEvent.click(screen.getByRole('button', { name: /Cart:/ }))
     await screen.findByRole('heading', { name: 'Cart' })
@@ -117,10 +117,10 @@ describe('App', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     render(<App database={database} />)
 
-    const croissantTile = await screen.findByRole('button', { name: /Croissant/ })
-    fireEvent.click(croissantTile)
+    const brownieTile = await screen.findByRole('button', { name: /Brownie 9 cubes/ })
+    fireEvent.click(brownieTile)
     await waitFor(() => {
-      expect(document.querySelector('.cart-bar-total')?.textContent).toBe('฿55')
+      expect(document.querySelector('.cart-bar-total')?.textContent).toBe('฿300')
     })
 
     screenThrowFlags.cart = true
@@ -135,7 +135,7 @@ describe('App', () => {
     // must be untouched by the crash.
     fireEvent.click(screen.getByRole('button', { name: /back to sell/i }))
     const bar = await screen.findByRole('button', { name: /Cart:/ })
-    expect(document.querySelector('.cart-bar-total')?.textContent).toBe('฿55')
+    expect(document.querySelector('.cart-bar-total')?.textContent).toBe('฿300')
     expect(bar).not.toBeDisabled()
 
     // Try again while still broken remounts and errors again — no crash
@@ -149,7 +149,7 @@ describe('App', () => {
     screenThrowFlags.cart = false
     fireEvent.click(screen.getByRole('button', { name: /try again/i }))
     expect(await screen.findByRole('heading', { name: 'Cart' })).toBeInTheDocument()
-    expect(document.querySelector('.cart-bottom-bar-total')?.textContent).toBe('Total ฿55')
+    expect(document.querySelector('.cart-bottom-bar-total')?.textContent).toBe('Total ฿300')
   })
 
   it('an error on the Sell screen itself (already home) shows no Back to Sell button', async () => {
@@ -167,7 +167,7 @@ describe('App', () => {
 describe('App — bottom nav', () => {
   it('shows the bottom nav on Sell, Orders, Report and Admin, highlighting the current one', async () => {
     render(<App database={database} />)
-    await screen.findByRole('button', { name: /Croissant/ })
+    await screen.findByRole('button', { name: /Brownie 9 cubes/ })
     expect(screen.getByRole('navigation', { name: 'Main' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Sell' })).toHaveAttribute('aria-current', 'page')
 
@@ -188,9 +188,9 @@ describe('App — bottom nav', () => {
 
   it('hides the bottom nav on Cart, Cash and PromptPay', async () => {
     render(<App database={database} />)
-    fireEvent.click(await screen.findByRole('button', { name: /Croissant/ }))
+    fireEvent.click(await screen.findByRole('button', { name: /Brownie 9 cubes/ }))
     await waitFor(() => {
-      expect(document.querySelector('.cart-bar-total')?.textContent).toBe('฿55')
+      expect(document.querySelector('.cart-bar-total')?.textContent).toBe('฿300')
     })
 
     fireEvent.click(screen.getByRole('button', { name: /Cart:/ }))
@@ -222,12 +222,12 @@ describe('App — bottom nav', () => {
 
   it('navigating away from Orders and back closes any open order detail', async () => {
     await completeOrder(
-      [{ productId: 'p-croissant', name: 'Croissant', unitPrice: 5500, qty: 1 }],
-      { method: 'cash', tendered: 5500, change: 0 },
+      [{ productId: 'p-brownie-9', name: 'Brownie 9 cubes', unitPrice: 30000, qty: 1 }],
+      { method: 'cash', tendered: 30000, change: 0 },
       database,
     )
     render(<App database={database} />)
-    await screen.findByRole('button', { name: /Croissant/ })
+    await screen.findByRole('button', { name: /Brownie 9 cubes/ })
 
     fireEvent.click(screen.getByRole('button', { name: 'Orders' }))
     fireEvent.click(await screen.findByRole('button', { name: /^#1/ }))
@@ -238,7 +238,7 @@ describe('App — bottom nav', () => {
     // discards its `selectedId` state — there's nothing here that
     // remembers "the detail was open" across that gap on purpose.
     fireEvent.click(screen.getByRole('button', { name: 'Sell' }))
-    await screen.findByRole('button', { name: /Croissant/ })
+    await screen.findByRole('button', { name: /Brownie 9 cubes/ })
 
     fireEvent.click(screen.getByRole('button', { name: 'Orders' }))
     expect(await screen.findByRole('button', { name: /^#1/ })).toBeInTheDocument()

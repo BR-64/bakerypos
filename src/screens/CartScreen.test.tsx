@@ -29,7 +29,7 @@ const croissantProduct: Product = {
   id: 'p-croissant',
   name: 'Croissant',
   price: 5500,
-  category: 'pastry',
+  category: 'cookies',
   sortOrder: 1,
   outOfStock: false,
   archived: false,

@@ -30,9 +30,9 @@ const stored: Settings = { ...DEFAULT_SETTINGS, shopName: 'Sunrise Bakery', prom
 
 const TEST_ID_WARNING = 'Test PromptPay ID — not a real account'
 
-/** Sell -> tap a Croissant -> Cart -> PromptPay, the way staff get there. */
+/** Sell -> tap a Brownie 9 cubes -> Cart -> PromptPay, the way staff get there. */
 async function goToPromptPay(): Promise<void> {
-  fireEvent.click(await screen.findByRole('button', { name: /Croissant/ }))
+  fireEvent.click(await screen.findByRole('button', { name: /Brownie 9 cubes/ }))
   fireEvent.click(await screen.findByRole('button', { name: /Cart:/ }))
   await screen.findByRole('heading', { name: 'Cart' })
   fireEvent.click(screen.getByRole('button', { name: 'PromptPay' }))
@@ -50,7 +50,7 @@ describe('App — PromptPay ID from the settings table', () => {
 
     await goToPromptPay()
 
-    await waitFor(() => expect(qr()).toHaveAttribute('data-value', promptPayPayload(realId, 5500)))
+    await waitFor(() => expect(qr()).toHaveAttribute('data-value', promptPayPayload(realId, 30000)))
     expect(screen.queryByText(TEST_ID_WARNING)).not.toBeInTheDocument()
   })
 
@@ -60,7 +60,7 @@ describe('App — PromptPay ID from the settings table', () => {
     await goToPromptPay()
 
     await waitFor(() =>
-      expect(qr()).toHaveAttribute('data-value', promptPayPayload(PLACEHOLDER_PROMPTPAY_ID, 5500)),
+      expect(qr()).toHaveAttribute('data-value', promptPayPayload(PLACEHOLDER_PROMPTPAY_ID, 30000)),
     )
     expect(screen.getByText(TEST_ID_WARNING)).toBeInTheDocument()
   })
@@ -74,7 +74,7 @@ describe('App — PromptPay ID from the settings table', () => {
     // `useSettings` runs in App's body, above every ErrorBoundary — a
     // re-thrown rejection here would take Sell, the cart bar and the nav
     // down together, leaving nothing to tap.
-    expect(await screen.findByRole('button', { name: /Croissant/ })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /Brownie 9 cubes/ })).toBeInTheDocument()
     expect(screen.getByRole('navigation', { name: 'Main' })).toBeInTheDocument()
     expect(screen.queryByText(/something went wrong/i)).not.toBeInTheDocument()
 
@@ -111,7 +111,7 @@ describe('App — PromptPay ID from the settings table', () => {
 
     release(stored)
 
-    await waitFor(() => expect(qr()).toHaveAttribute('data-value', promptPayPayload(realId, 5500)))
+    await waitFor(() => expect(qr()).toHaveAttribute('data-value', promptPayPayload(realId, 30000)))
     expect(screen.queryByText('Loading PromptPay settings…')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Paid — done' })).toBeEnabled()
   })

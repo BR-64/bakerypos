@@ -37,7 +37,7 @@ const fixtures: Product[] = [
     id: 'p-croissant',
     name: 'Croissant',
     price: 5500,
-    category: 'pastry',
+    category: 'cookies',
     sortOrder: 1,
     outOfStock: false,
     archived: false,
@@ -46,7 +46,7 @@ const fixtures: Product[] = [
     id: 'p-cookie',
     name: 'Cookie',
     price: 4000,
-    category: 'pastry',
+    category: 'cookies',
     sortOrder: 2,
     outOfStock: true,
     archived: false,
@@ -55,7 +55,7 @@ const fixtures: Product[] = [
     id: 'p-old-cake',
     name: 'Old Cake',
     price: 7500,
-    category: 'cake',
+    category: 'jar',
     sortOrder: 3,
     outOfStock: false,
     archived: true,
@@ -64,7 +64,7 @@ const fixtures: Product[] = [
     id: 'p-baguette',
     name: 'Baguette',
     price: 6000,
-    category: 'bread',
+    category: 'brownies',
     sortOrder: 4,
     outOfStock: false,
     archived: false,
@@ -113,7 +113,7 @@ describe('SellScreen', () => {
     await screen.findByRole('button', { name: /Croissant/ })
     expect(screen.getByRole('button', { name: /Baguette/ })).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Bread' }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Brownies' }))
 
     expect(screen.getByRole('button', { name: /Baguette/ })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Croissant/ })).not.toBeInTheDocument()
@@ -141,7 +141,7 @@ describe('SellScreen', () => {
         id: 'p-bad-price',
         name: 'Bad Price',
         price: 55.5,
-        category: 'drink',
+        category: 'jar',
         sortOrder: 10,
         outOfStock: false,
         archived: false,
@@ -151,7 +151,7 @@ describe('SellScreen', () => {
         name: 'Missing Price',
         // @ts-expect-error deliberately missing price
         price: undefined,
-        category: 'drink',
+        category: 'jar',
         sortOrder: 11,
         outOfStock: false,
         archived: false,
@@ -160,7 +160,7 @@ describe('SellScreen', () => {
         id: 'p-empty-name',
         name: '',
         price: 2000,
-        category: 'drink',
+        category: 'jar',
         sortOrder: 12,
         outOfStock: false,
         archived: false,
@@ -170,7 +170,7 @@ describe('SellScreen', () => {
         // @ts-expect-error deliberately missing name
         name: undefined,
         price: 2000,
-        category: 'drink',
+        category: 'jar',
         sortOrder: 13,
         outOfStock: false,
         archived: false,
@@ -179,7 +179,7 @@ describe('SellScreen', () => {
         id: 'p-string-archived',
         name: 'String Archived',
         price: 2000,
-        category: 'drink',
+        category: 'jar',
         sortOrder: 14,
         outOfStock: false,
         // @ts-expect-error deliberately bad data
@@ -189,7 +189,7 @@ describe('SellScreen', () => {
         id: 'p-string-oos',
         name: 'String OOS',
         price: 2000,
-        category: 'drink',
+        category: 'jar',
         sortOrder: 15,
         // @ts-expect-error deliberately bad data
         outOfStock: 'false',
@@ -199,7 +199,7 @@ describe('SellScreen', () => {
         id: 'p-undef-sort',
         name: 'Undef Sort',
         price: 2000,
-        category: 'drink',
+        category: 'jar',
         // @ts-expect-error deliberately missing sortOrder
         sortOrder: undefined,
         outOfStock: false,
@@ -249,7 +249,7 @@ describe('SellScreen', () => {
 
     // Good products still add, and the total stays exact through a rerender
     // (tab switch) and a few taps — and logging does not repeat.
-    fireEvent.click(screen.getByRole('tab', { name: 'Pastry' }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Soft cookies' }))
     fireEvent.click(screen.getByRole('tab', { name: 'All' }))
     fireEvent.click(croissantTile)
     await waitFor(() => expect(cartBarTotalText()).toBe('฿55'))
@@ -306,7 +306,7 @@ describe('SellScreen', () => {
       id: 'p-banana-cake',
       name: 'Banana Cake',
       price: 7500,
-      category: 'cake',
+      category: 'jar',
       sortOrder: 5,
       outOfStock: false,
       archived: false,
@@ -315,14 +315,14 @@ describe('SellScreen', () => {
     render(<Harness db={database} />)
 
     await screen.findByRole('button', { name: /Croissant/ })
-    fireEvent.click(screen.getByRole('tab', { name: 'Cake' }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Jar' }))
     expect(await screen.findByRole('button', { name: /Banana Cake/ })).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: 'Cake' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tab', { name: 'Jar' })).toHaveAttribute('aria-selected', 'true')
 
     await database.products.update('p-banana-cake', { archived: true })
 
     await waitFor(() => {
-      expect(screen.queryByRole('tab', { name: 'Cake' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('tab', { name: 'Jar' })).not.toBeInTheDocument()
     })
     expect(screen.getByRole('tab', { name: 'All' })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByRole('button', { name: /Croissant/ })).toBeInTheDocument()
@@ -338,7 +338,7 @@ describe('SellScreen', () => {
       id: 'p-new',
       name: 'New Item',
       price: 3000,
-      category: 'drink',
+      category: 'jar',
       sortOrder: 20,
       outOfStock: false,
       archived: false,
@@ -365,7 +365,7 @@ describe('SellScreen', () => {
       id: 'p-expensive',
       name: 'Expensive Cake',
       price: 999_999_900,
-      category: 'cake',
+      category: 'jar',
       sortOrder: 1,
       outOfStock: false,
       archived: false,

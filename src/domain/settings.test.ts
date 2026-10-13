@@ -75,9 +75,9 @@ describe('isValidSettings', () => {
   })
 
   it('rejects a category order that is not a full permutation', () => {
-    expect(isValidSettings({ ...good, categoryOrder: ['cake'] })).toBe(false)
+    expect(isValidSettings({ ...good, categoryOrder: ['jar'] })).toBe(false)
     expect(isValidSettings({ ...good, categoryOrder: undefined })).toBe(false)
-    expect(isValidSettings({ ...good, categoryOrder: [...CATEGORY_ORDER, 'cake'] })).toBe(false)
+    expect(isValidSettings({ ...good, categoryOrder: [...CATEGORY_ORDER, 'jar'] })).toBe(false)
   })
 })
 
@@ -139,11 +139,10 @@ describe('coerceSettings', () => {
     expect(stored.pinHash).toBe(hash)
     expect(stored.pinSalt).toBe(salt)
     expect(stored.recoveryHash).toBe(otherHash)
-    expect(coerceSettings({ ...good, categoryOrder: ['drink', 'cake'] }).categoryOrder).toEqual([
-      'drink',
-      'cake',
-      'bread',
-      'pastry',
+    expect(coerceSettings({ ...good, categoryOrder: ['jar', 'cookies'] }).categoryOrder).toEqual([
+      'jar',
+      'cookies',
+      'brownies',
       'other',
     ])
   })
@@ -196,12 +195,27 @@ describe('coerceSettings', () => {
   })
 
   it('repairs a category order that is missing, junk, duplicated or unknown', () => {
-    expect(coerceSettings({ ...good, categoryOrder: 'cake' }).categoryOrder).toEqual([
+    expect(coerceSettings({ ...good, categoryOrder: 'jar' }).categoryOrder).toEqual([
       ...CATEGORY_ORDER,
     ])
     expect(
-      coerceSettings({ ...good, categoryOrder: ['cake', 'cake', 'nope', null] }).categoryOrder,
-    ).toEqual(['cake', 'bread', 'pastry', 'drink', 'other'])
+      coerceSettings({ ...good, categoryOrder: ['jar', 'jar', 'nope', null] }).categoryOrder,
+    ).toEqual(['jar', 'brownies', 'cookies', 'other'])
+  })
+
+  it('repairs the category order a device stored before the menu changed', () => {
+    // A phone that was used with the old menu has the old tab order in its
+    // settings row. None of those names is a category any more, so the
+    // repair must rebuild a full permutation of the new ones rather than
+    // throw or leave the Sell screen with no tabs at all.
+    const stored = { ...good, categoryOrder: ['bread', 'pastry', 'cake', 'drink', 'other'] }
+
+    expect(() => coerceSettings(stored)).not.toThrow()
+    // 'other' is the one old name that survived, so it keeps its place at
+    // the front; the new categories follow in CATEGORY_ORDER order. The
+    // owner can reorder them from Admin.
+    expect(coerceSettings(stored).categoryOrder).toEqual(['other', 'brownies', 'cookies', 'jar'])
+    expect(isValidSettings(coerceSettings(stored))).toBe(true)
   })
 
   it('never hands back the shared CATEGORY_ORDER array, so Admin can reorder safely', () => {

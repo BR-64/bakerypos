@@ -61,7 +61,7 @@ describe('App — the checkout path never asks for a PIN', () => {
   it('goes Sell → Cart → Cash → paid with no keypad anywhere', async () => {
     render(<App database={database} />)
 
-    fireEvent.click(await screen.findByRole('button', { name: /Croissant/ }))
+    fireEvent.click(await screen.findByRole('button', { name: /Brownie 9 cubes/ }))
     fireEvent.click(await screen.findByRole('button', { name: /Cart:/ }))
     await screen.findByRole('heading', { name: 'Cart' })
     fireEvent.click(screen.getByRole('button', { name: 'Cash' }))
@@ -69,7 +69,7 @@ describe('App — the checkout path never asks for a PIN', () => {
 
     expect(screen.queryByText(/Enter the PIN/)).not.toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Exact ฿55' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Exact ฿300' }))
 
     expect(await screen.findByText(/Order #1/)).toBeInTheDocument()
     expect(await database.orders.count()).toBe(1)
@@ -79,7 +79,7 @@ describe('App — the checkout path never asks for a PIN', () => {
 
   it('never asks on Orders or Report either — only Admin and Void do', async () => {
     render(<App database={database} />)
-    await screen.findByRole('button', { name: /Croissant/ })
+    await screen.findByRole('button', { name: /Brownie 9 cubes/ })
 
     goTo('Orders')
     expect(await screen.findByRole('heading', { name: 'Orders' })).toBeInTheDocument()
@@ -94,7 +94,7 @@ describe('App — the checkout path never asks for a PIN', () => {
 describe('App — first run sets the PIN', () => {
   it('asks for a new PIN, shows the recovery code once, then opens Admin', async () => {
     render(<App database={database} />)
-    await screen.findByRole('button', { name: /Croissant/ })
+    await screen.findByRole('button', { name: /Brownie 9 cubes/ })
 
     goTo('Admin')
 
@@ -128,7 +128,7 @@ describe('App — unlocking Admin', () => {
     const settings = await settingsWithPin('4821')
     await saveSettings(settings, database)
     render(<App database={database} />)
-    await screen.findByRole('button', { name: /Croissant/ })
+    await screen.findByRole('button', { name: /Brownie 9 cubes/ })
 
     goTo('Admin')
     await screen.findByRole('heading', { name: 'Enter the PIN for Admin' })
@@ -151,7 +151,7 @@ describe('App — unlocking Admin', () => {
   it('locks the keypad for 60 seconds after five wrong attempts, across a remount', async () => {
     await saveSettings(await settingsWithPin('4821'), database)
     render(<App database={database} />)
-    await screen.findByRole('button', { name: /Croissant/ })
+    await screen.findByRole('button', { name: /Brownie 9 cubes/ })
 
     goTo('Admin')
     await screen.findByRole('heading', { name: 'Enter the PIN for Admin' })
@@ -187,7 +187,7 @@ describe('App — unlocking Admin', () => {
   it('stays unlocked for five minutes, then asks again', async () => {
     await saveSettings(await settingsWithPin('4821'), database)
     render(<App database={database} />)
-    await screen.findByRole('button', { name: /Croissant/ })
+    await screen.findByRole('button', { name: /Brownie 9 cubes/ })
 
     goTo('Admin')
     await screen.findByRole('heading', { name: 'Enter the PIN for Admin' })
@@ -215,7 +215,7 @@ describe('App — unlocking Admin', () => {
     const settings = await settingsWithPin('4821')
     await saveSettings(settings, database)
     render(<App database={database} />)
-    await screen.findByRole('button', { name: /Croissant/ })
+    await screen.findByRole('button', { name: /Brownie 9 cubes/ })
 
     goTo('Admin')
     await screen.findByRole('heading', { name: 'Enter the PIN for Admin' })
@@ -257,10 +257,10 @@ describe('App — unlocking Admin', () => {
     render(<App database={database} />)
 
     // One cash sale, so there is something to void.
-    fireEvent.click(await screen.findByRole('button', { name: /Croissant/ }))
+    fireEvent.click(await screen.findByRole('button', { name: /Brownie 9 cubes/ }))
     fireEvent.click(await screen.findByRole('button', { name: /Cart:/ }))
     fireEvent.click(await screen.findByRole('button', { name: 'Cash' }))
-    fireEvent.click(await screen.findByRole('button', { name: 'Exact ฿55' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Exact ฿300' }))
     await screen.findByText(/Order #1/)
 
     goTo('Orders')

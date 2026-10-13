@@ -50,15 +50,15 @@ afterEach(() => {
 })
 
 async function completeACashSale() {
-  fireEvent.click(await screen.findByRole('button', { name: /Croissant/ }))
+  fireEvent.click(await screen.findByRole('button', { name: /Brownie 9 cubes/ }))
   await waitFor(() => {
-    expect(document.querySelector('.cart-bar-total')?.textContent).toBe('฿55')
+    expect(document.querySelector('.cart-bar-total')?.textContent).toBe('฿300')
   })
   fireEvent.click(screen.getByRole('button', { name: /Cart:/ }))
   await screen.findByRole('heading', { name: 'Cart' })
   fireEvent.click(screen.getByRole('button', { name: 'Cash' }))
   await screen.findByRole('heading', { name: 'Cash' })
-  fireEvent.click(screen.getByRole('button', { name: 'Exact ฿55' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Exact ฿300' }))
   await waitFor(() => {
     expect(screen.getByRole('status')).toHaveTextContent('Order #1')
   })
@@ -73,8 +73,8 @@ describe('App — tap shield', () => {
     // screen just remounted (App keys each screen's ErrorBoundary by
     // `${screen}:${retryKey}`), so its product grid is querying again —
     // `findByRole` waits that out.
-    const croissantTile = await screen.findByRole('button', { name: /Croissant/ })
-    fireEvent.click(croissantTile)
+    const brownieTile = await screen.findByRole('button', { name: /Brownie 9 cubes/ })
+    fireEvent.click(brownieTile)
     expect(document.querySelector('.cart-bar-total')?.textContent).toBe('฿0')
 
     // Only a small advance — see the beforeEach comment on why this stays
@@ -82,7 +82,7 @@ describe('App — tap shield', () => {
     act(() => {
       vi.advanceTimersByTime(50)
     })
-    fireEvent.click(croissantTile)
+    fireEvent.click(brownieTile)
     expect(document.querySelector('.cart-bar-total')?.textContent).toBe('฿0')
 
     // Comfortably past the full window from here, however much real time
@@ -90,8 +90,8 @@ describe('App — tap shield', () => {
     act(() => {
       vi.advanceTimersByTime(TAP_SHIELD_MS)
     })
-    fireEvent.click(croissantTile)
-    expect(document.querySelector('.cart-bar-total')?.textContent).toBe('฿55')
+    fireEvent.click(brownieTile)
+    expect(document.querySelector('.cart-bar-total')?.textContent).toBe('฿300')
   })
 
   it('the order toast stays tappable, and still dismisses on tap, while the shield is up', async () => {
@@ -130,8 +130,8 @@ describe('App — tap shield', () => {
     // make the assertions above pass vacuously, against an unscoped guard
     // too): back on Sell, the very next tile tap is still blocked.
     fireEvent.click(screen.getByRole('button', { name: 'Sell' }))
-    const croissantTile = await screen.findByRole('button', { name: /Croissant/ })
-    fireEvent.click(croissantTile)
+    const brownieTile = await screen.findByRole('button', { name: /Brownie 9 cubes/ })
+    fireEvent.click(brownieTile)
     expect(document.querySelector('.cart-bar-total')?.textContent).toBe('฿0')
   })
 
