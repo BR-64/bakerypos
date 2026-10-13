@@ -1,6 +1,7 @@
 import { isSellable } from '../domain/cart'
 import { formatBaht } from '../domain/money'
 import type { Product } from '../domain/types'
+import { useProductImage } from '../hooks/useProductImage'
 
 export interface ProductTileProps {
   product: Product
@@ -20,15 +21,57 @@ export interface ProductTileProps {
  * it renders nothing, and never logs (the caller is responsible for
  * logging once, since a tile re-rendering many times must not spam the
  * console).
+ *
+ * The picture lives in `SellableTile` rather than here so that guard stays
+ * a plain early return: `useProductImage` is a hook and so cannot run
+ * after one, and running it for a product we are about to refuse to render
+ * would mean logging about the picture on a tile that never appears.
  */
 export function ProductTile({ product, onAdd }: ProductTileProps) {
   if (!isSellable(product)) return null
+  return <SellableTile product={product} onAdd={onAdd} />
+}
 
+/**
+ * The tile proper, for a product already known to be sellable.
+ *
+ * A picture is decoration: `useProductImage` returns `null` for a product
+ * with no photo and no shipped file, which is the normal case, and then no
+ * `<img>` is rendered at all — the tile is the name and price it has
+ * always been. Name and price sit *under* the picture rather than over it,
+ * so they are read against the tile's own background and no photo can make
+ * a price hard to read.
+ *
+ * The picture's box is reserved by `aspect-ratio` in CSS from the first
+ * render, so the grid does not reflow as pictures decode. The `<img>` is
+ * `pointer-events: none` (see `.tile-image`), so every tap inside the tile
+ * lands on the button and not on an image drag.
+ */
+function SellableTile({ product, onAdd }: ProductTileProps) {
+  const picture = useProductImage(product)
   const priceLabel = formatBaht(product.price)
+
+  const media =
+    picture.src === null ? null : (
+      <span className="tile-media">
+        <img
+          className="tile-image"
+          src={picture.src}
+          // Empty on purpose: the button's accessible name already says the
+          // product name, and a real `alt` here would read it out twice.
+          alt=""
+          loading="lazy"
+          decoding="async"
+          draggable={false}
+          onError={picture.onError}
+        />
+      </span>
+    )
 
   if (product.outOfStock === true) {
     return (
       <button type="button" className="tile tile-disabled" disabled>
+        {media}
         <span>{product.name}</span>
         <strong>{priceLabel}</strong>
         <span className="tile-sold-out">Sold out</span>
@@ -38,6 +81,7 @@ export function ProductTile({ product, onAdd }: ProductTileProps) {
 
   return (
     <button type="button" className="tile" onClick={() => onAdd(product)}>
+      {media}
       <span>{product.name}</span>
       <strong>{priceLabel}</strong>
     </button>

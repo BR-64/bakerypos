@@ -12,6 +12,37 @@ export type Satang = number
 
 export type Category = 'brownies' | 'cookies' | 'jar' | 'other'
 
+/**
+ * A photo taken in Admin, stored on this device only.
+ *
+ * Why a `Blob` and not a data URL: IndexedDB stores a Blob natively via
+ * structured clone, and `URL.createObjectURL` takes one directly — so
+ * neither the write nor the read ever copies a few hundred KB of image
+ * through a JS string, and the Sell grid's first paint stays cheap. A
+ * base64 data URL would be ~33% larger at rest and would have to be
+ * re-parsed on every live-query emission.
+ *
+ * Why `width`/`height` are stored alongside it: they let a record be
+ * checked for corruption *without decoding the blob* (a synchronous,
+ * zero-cost guard on the checkout path) and they pin that the long edge
+ * really is within `MAX_IMAGE_EDGE` at rest. The tile does not need them
+ * for layout — it reserves a fixed-aspect box, so nothing reflows when a
+ * picture decodes.
+ *
+ * Not indexed, so this needs no new Dexie version (see `src/db/db.ts`).
+ * Never copied onto an `OrderLine`: order history and receipts stay text.
+ */
+export interface ProductImage {
+  /** Re-encoded and downscaled by `resizeImageFile` — never the raw camera file. */
+  blob: Blob
+  /** `'image/webp'`, or `'image/jpeg'` where WebP encoding isn't available. */
+  type: string
+  /** Pixel width of `blob`. */
+  width: number
+  /** Pixel height of `blob`. */
+  height: number
+}
+
 export interface Product {
   id: string
   name: string
@@ -24,6 +55,14 @@ export interface Product {
   outOfStock: boolean
   /** Archived products stay in the DB so old orders still reference them. */
   archived: boolean
+  /**
+   * Optional photo, uploaded in Admin and kept on this device. Absent is
+   * the normal state, not an error: the tile then looks for a picture
+   * shipped in the repo (`public/products/<id>.webp`) and falls back to
+   * name + price. Deliberately left out of backups — see
+   * `src/domain/backup.ts`.
+   */
+  image?: ProductImage
 }
 
 export interface OrderLine {

@@ -495,8 +495,79 @@ describe('settingsChanges', () => {
 
   it('is empty when nothing would move', () => {
     expect(
-      settingsChanges({ ...here, categoryOrder: ['brownies'] }, { ...here, categoryOrder: ['brownies'] }),
+      settingsChanges(
+        { ...here, categoryOrder: ['brownies'] },
+        { ...here, categoryOrder: ['brownies'] },
+      ),
     ).toEqual([])
+  })
+})
+
+describe('buildExport — pictures stay on the device', () => {
+  function withPhoto(product: Product): Product {
+    return {
+      ...product,
+      image: {
+        blob: new Blob([new Uint8Array(150 * 1024)], { type: 'image/webp' }),
+        type: 'image/webp',
+        width: 512,
+        height: 384,
+      },
+    }
+  }
+
+  it('leaves the picture out of the exported product entirely', () => {
+    const payload = exported({ products: [withPhoto(croissant), withPhoto(sourdough)] })
+
+    expect(payload.products).toHaveLength(2)
+    for (const product of payload.products) {
+      expect(product).not.toHaveProperty('image')
+      // The allowlist is exactly seven fields, and nothing a future
+      // `Product` field could add is allowed to ride along with them.
+      expect(Object.keys(product).sort()).toEqual([
+        'archived',
+        'category',
+        'id',
+        'name',
+        'outOfStock',
+        'price',
+        'sortOrder',
+      ])
+    }
+  })
+
+  it('writes no image data into the file, anywhere', () => {
+    const json = JSON.stringify(
+      exported({ products: [withPhoto(croissant)], settings: withPhoto(croissant) }),
+      null,
+      2,
+    )
+    expect(json).not.toContain('image')
+    expect(json).not.toContain('webp')
+    expect(json).not.toContain('blob')
+  })
+
+  it('keeps the file exactly the size it was before pictures existed', () => {
+    const plain = JSON.stringify(exported({ products: [croissant, sourdough] }), null, 2)
+    const photographed = JSON.stringify(
+      exported({ products: [withPhoto(croissant), withPhoto(sourdough)] }),
+      null,
+      2,
+    )
+    // Byte for byte, not merely "about the same": 300 KB of photos must
+    // not be able to grow a backup by a single character.
+    expect(photographed).toBe(plain)
+  })
+
+  it('still round-trips: a photographed product survives export and import', () => {
+    const payload = exported({ products: [withPhoto(croissant)] })
+    expect(roundTrip(payload).products).toEqual([croissant])
+  })
+
+  it('does not treat a picture as a product difference', () => {
+    // So the import confirmation never claims a product "would be
+    // replaced" just because this phone has a photo of it.
+    expect(sameProduct(croissant, withPhoto(croissant))).toBe(true)
   })
 })
 

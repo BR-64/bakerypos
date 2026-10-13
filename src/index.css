@@ -72,10 +72,46 @@ body,
   touch-action: manipulation;
 }
 
+/* The picture's box, when a product has one (ProductTile.tsx).
+   `aspect-ratio` reserves it from the very first render, so the grid never
+   reflows as pictures decode — the tile is its final height before a
+   single byte of image has arrived. No `aspect-ratio` support (very old
+   WebViews) falls back to `min-height`, which reserves the same box at the
+   two-column width this grid always uses. */
+.tile-media {
+  display: block;
+  flex: 0 0 auto;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  min-height: 72px;
+  margin-bottom: 8px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.tile-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* Every tap inside the tile belongs to the button — never to an image
+     drag or long-press. */
+  pointer-events: none;
+  -webkit-user-drag: none;
+}
+
 .tile-disabled {
   opacity: 0.55;
   background: var(--bg);
   box-shadow: none;
+}
+
+/* Sold out has to read as sold out on top of an appetising photo, not just
+   at 55% opacity. The "Sold out" label itself sits under the picture, on
+   the tile's own background, so no photo can swallow it. */
+.tile-disabled .tile-image {
+  filter: grayscale(1);
 }
 
 .tile-sold-out {

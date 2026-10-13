@@ -1,12 +1,14 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import type { Product } from '../domain/types'
+import type { Product, ProductImage } from '../domain/types'
 import { PosDatabase } from './db'
 import { completeOrder } from './orders'
 import {
   allProducts,
   archiveProduct,
+  clearProductImage,
   createProduct,
   sellableProducts,
+  setProductImage,
   setProductOutOfStock,
   updateProduct,
 } from './products'
@@ -285,5 +287,93 @@ describe('archiveProduct', () => {
 
   it('rejects an unknown id', async () => {
     await expect(archiveProduct('p-nope', true, database)).rejects.toThrow('no longer exists')
+  })
+})
+
+describe('setProductImage / clearProductImage', () => {
+  function picture(bytes = 2048, type = 'image/webp'): ProductImage {
+    const blob = new Blob([new Uint8Array(bytes)], { type })
+    return { blob, type, width: 512, height: 384 }
+  }
+
+  it('stores a picture without touching name, price, position or stock', async () => {
+    await database.products.bulkAdd(fixtures)
+
+    await setProductImage('p-sourdough', picture(), database)
+
+    const stored = await database.products.get('p-sourdough')
+    expect(stored?.name).toBe('Sourdough Loaf')
+    expect(stored?.price).toBe(12000)
+    expect(stored?.sortOrder).toBe(4)
+    expect(stored?.outOfStock).toBe(true)
+    expect(stored?.image?.width).toBe(512)
+    expect(stored?.image?.height).toBe(384)
+    expect(stored?.image?.type).toBe('image/webp')
+    expect(stored?.image?.blob.size).toBe(2048)
+  })
+
+  it('replaces a picture rather than keeping both', async () => {
+    await database.products.bulkAdd(fixtures)
+
+    await setProductImage('p-cookie', picture(2048), database)
+    await setProductImage('p-cookie', picture(4096), database)
+
+    expect((await database.products.get('p-cookie'))?.image?.blob.size).toBe(4096)
+  })
+
+  it('refuses a picture the Sell grid would then ignore, writing nothing', async () => {
+    await database.products.bulkAdd(fixtures)
+
+    // A raw 3 MB camera file is exactly what must never reach IndexedDB.
+    const huge = picture(1, 'image/jpeg')
+    Object.defineProperty(huge.blob, 'size', { value: 3 * 1024 * 1024 })
+    await expect(setProductImage('p-cookie', huge, database)).rejects.toThrow(/larger than/)
+
+    await expect(
+      setProductImage('p-cookie', { width: 1 } as unknown as ProductImage, database),
+    ).rejects.toThrow(/can't be saved/)
+
+    expect((await database.products.get('p-cookie'))?.image).toBeUndefined()
+  })
+
+  it('rejects an unknown id', async () => {
+    await expect(setProductImage('p-nope', picture(), database)).rejects.toThrow('no longer exists')
+    await expect(clearProductImage('p-nope', database)).rejects.toThrow('no longer exists')
+  })
+
+  it('removing a picture leaves the product itself exactly as it was', async () => {
+    await database.products.bulkAdd(fixtures)
+
+    await setProductImage('p-cookie', picture(), database)
+    await clearProductImage('p-cookie', database)
+
+    const stored = await database.products.get('p-cookie')
+    expect(stored?.image).toBeUndefined()
+    // Still on the menu — removing a photo is never a delete.
+    expect(await database.products.count()).toBe(fixtures.length)
+    expect(stored?.name).toBe('Cookie')
+    expect(stored?.price).toBe(4000)
+  })
+
+  it('a product edit keeps the picture, and the picture never reaches an old order', async () => {
+    await database.products.bulkAdd(fixtures)
+    await setProductImage('p-croissant', picture(), database)
+    const order = await completeOrder(
+      [{ productId: 'p-croissant', name: 'Croissant', unitPrice: 5500, qty: 1 }],
+      { method: 'cash', tendered: 10000, change: 4500 },
+      database,
+    )
+
+    await updateProduct(
+      'p-croissant',
+      { name: 'Butter Croissant', price: 9900, category: 'cookies' },
+      database,
+    )
+
+    expect((await database.products.get('p-croissant'))?.image?.blob.size).toBe(2048)
+    // The picture changed nothing about the money record.
+    expect(await database.orders.get(order.id)).toEqual(order)
+    expect((await database.orders.get(order.id))?.lines[0].unitPrice).toBe(5500)
+    expect((await database.orders.get(order.id))?.lines[0]).not.toHaveProperty('image')
   })
 })

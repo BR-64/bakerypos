@@ -214,3 +214,62 @@
   border-radius: 8px;
   background: var(--bg);
 }
+
+/* Admin → Menu → one product's photo (ProductImageField.tsx). */
+.admin-image-field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.admin-image-thumb {
+  display: block;
+  flex: 0 0 auto;
+  width: 64px;
+  /* Same 4:3 crop as the Sell tile, so what is set here is what the till
+     shows. Reserved up front, so the row does not jump as it decodes. */
+  aspect-ratio: 4 / 3;
+  min-height: 48px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.admin-image-preview {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.admin-image-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* The label *is* the button (it opens the OS picker), so it has to carry
+   the same 48px tap target every other control here does — a <label> is
+   inline by default and would otherwise be only as tall as its text. */
+.admin-image-button {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Off-screen rather than `display: none`, so the input is still reachable
+   with a keyboard and still announced; the label above is what gets
+   tapped. */
+.admin-image-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}

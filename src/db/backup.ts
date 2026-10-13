@@ -81,6 +81,8 @@ interface ProductComparison {
   known: Set<string>
   changed: Product[]
   priceChanges: PriceChange[]
+  /** The stored row for each id the device already has, for `keepingImages`. */
+  stored: Map<string, Product>
 }
 
 async function compareProducts(
@@ -90,13 +92,15 @@ async function compareProducts(
   const known = new Set<string>()
   const changed: Product[] = []
   const priceChanges: PriceChange[] = []
-  if (products.length === 0) return { known, changed, priceChanges }
+  const rows = new Map<string, Product>()
+  if (products.length === 0) return { known, changed, priceChanges, stored: rows }
 
   const stored = await database.products.bulkGet(products.map((product) => product.id))
   products.forEach((incoming, index) => {
     const current = stored[index]
     if (current === undefined) return
     known.add(incoming.id)
+    rows.set(incoming.id, current)
     if (sameProduct(current, incoming)) return
     changed.push(incoming)
     if (current.price !== incoming.price) {
@@ -109,7 +113,26 @@ async function compareProducts(
       })
     }
   })
-  return { known, changed, priceChanges }
+  return { known, changed, priceChanges, stored: rows }
+}
+
+/**
+ * The file's products, each carrying forward the picture already on this
+ * phone.
+ *
+ * A backup never contains pictures (they are device-only — see
+ * `buildExport`'s allowlist), and replacing product details is a `put`,
+ * which writes the whole row. Without this, ticking "also replace product
+ * details" would silently wipe every photo the owner had taken — a
+ * destructive side effect of a choice that is only supposed to be about
+ * names, prices, categories and positions. `sameProduct` ignores `image`
+ * for the same reason, so a photo never makes a product look "changed".
+ */
+function keepingImages(products: Product[], stored: Map<string, Product>): Product[] {
+  return products.map((product) => {
+    const image = stored.get(product.id)?.image
+    return image === undefined ? product : { ...product, image }
+  })
 }
 
 /**
@@ -254,7 +277,9 @@ export async function importBackup(
 
       if (newOrders.length > 0) await database.orders.bulkAdd(newOrders)
       if (replaceDetails) {
-        if (valid.products.length > 0) await database.products.bulkPut(valid.products)
+        if (valid.products.length > 0) {
+          await database.products.bulkPut(keepingImages(valid.products, products.stored))
+        }
       } else if (newProducts.length > 0) {
         await database.products.bulkAdd(newProducts)
       }

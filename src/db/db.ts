@@ -21,6 +21,13 @@ export class PosDatabase extends Dexie {
     this.version(1).stores({
       // Only indexed fields are listed; the full object is stored regardless.
       // Booleans (archived, outOfStock) cannot be indexed in IndexedDB — filter in JS.
+      //
+      // `Product.image` (the Admin photo) is therefore stored here with no
+      // version bump and no upgrade: it is unindexed, nothing queries by
+      // it, and a row saved before pictures existed simply has no such
+      // property — which is the same "no picture" state as a row that
+      // never gets one. A new `.version(n)` would be required only if it
+      // ever needed an index, which a Blob cannot have anyway.
       products: 'id, category, sortOrder',
       orders: 'id, number, createdAt, status, sync',
     })

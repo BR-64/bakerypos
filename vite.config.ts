@@ -37,7 +37,15 @@ export default defineConfig({
       },
       workbox: {
         // The whole app shell is precached so checkout works with no network.
-        globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+        //
+        // `webp`, `jpg` and `jpeg` are here for the product pictures
+        // shipped in `public/products/` (see its README). They were *not*
+        // covered before — the list was js/css/html/svg/png/woff2 — so
+        // without them a tile picture would have been the one thing on the
+        // Sell screen that needed the network. Photos the owner uploads in
+        // Admin are in IndexedDB and are nothing to do with the service
+        // worker.
+        globPatterns: ['**/*.{js,css,html,svg,png,webp,jpg,jpeg,woff2}'],
       },
     }),
   ],

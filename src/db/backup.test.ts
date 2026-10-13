@@ -293,6 +293,54 @@ describe('importBackup — product details are opt-in', () => {
     expect(stored?.lines[0].unitPrice).toBe(5500)
     expect(stored?.total).toBe(11000)
   })
+
+  it('never costs this phone a photo, even when details are replaced', async () => {
+    // A backup carries no pictures at all, and replacing details is a
+    // whole-row write — so without carrying the stored picture forward,
+    // ticking that box would silently wipe every photo the owner took.
+    const payload = await targetWithOwnPrice()
+    const image = {
+      blob: new Blob([new Uint8Array(4096)], { type: 'image/webp' }),
+      type: 'image/webp',
+      width: 512,
+      height: 384,
+    }
+    await target.products.update('p-croissant', { image })
+
+    await importBackup(payload, target, { replaceDetails: true })
+
+    const stored = await target.products.get('p-croissant')
+    // Details replaced…
+    expect(stored?.price).toBe(9900)
+    expect(stored?.name).toBe('Croissant (old)')
+    // …picture kept.
+    expect(stored?.image?.blob.size).toBe(4096)
+    expect(stored?.image?.width).toBe(512)
+  })
+
+  it('keeps the photo when details are not replaced either', async () => {
+    const payload = await targetWithOwnPrice()
+    await target.products.update('p-croissant', {
+      image: {
+        blob: new Blob([new Uint8Array(2048)], { type: 'image/webp' }),
+        type: 'image/webp',
+        width: 512,
+        height: 384,
+      },
+    })
+
+    await importBackup(payload, target)
+
+    expect((await target.products.get('p-croissant'))?.image?.blob.size).toBe(2048)
+  })
+
+  it('a product arriving from a backup simply has no picture', async () => {
+    const payload = await targetWithOwnPrice()
+
+    await importBackup(payload, target, { replaceDetails: true })
+
+    expect((await target.products.get('p-sourdough'))?.image).toBeUndefined()
+  })
 })
 
 describe('importBackup — shop settings are opt-in', () => {

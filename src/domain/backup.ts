@@ -191,7 +191,19 @@ function productProblem(value: unknown): string | null {
   return null
 }
 
-/** A product rebuilt from an allowlist of its seven fields — never the caller's object. */
+/**
+ * A product rebuilt from an allowlist of its seven fields — never the
+ * caller's object.
+ *
+ * The allowlist is what keeps `Product.image` out of a backup, and it must
+ * stay that way. A picture is a few hundred KB of binary that `JSON.stringify`
+ * would turn into `{}` anyway, and the decision (see the task notes) is
+ * that pictures are device-only: a backup stays a small, readable text
+ * file that can be mailed to yourself, and an import can't carry someone
+ * else's photos onto this phone. `importBackup` compensates by carrying
+ * the stored picture forward over a replace (`keepingImages` in
+ * `src/db/backup.ts`), so exporting and re-importing never costs a photo.
+ */
 function readProduct(value: Record<string, unknown>): Product {
   return {
     id: value.id as string,

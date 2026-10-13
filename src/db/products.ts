@@ -5,7 +5,8 @@ import {
   MAX_PRODUCT_PRICE,
   type ProductValues,
 } from '../domain/productDraft'
-import type { Product } from '../domain/types'
+import { imageProblem } from '../domain/productImage'
+import type { Product, ProductImage } from '../domain/types'
 import { db, type PosDatabase } from './db'
 
 /** `sortOrder` as a finite number, or `+Infinity` if it isn't one — sorts
@@ -134,6 +135,55 @@ export async function updateProduct(
     price: values.price,
     category: values.category,
   })
+  if (changed === 0) throw new Error('That product no longer exists')
+}
+
+/**
+ * Store (or replace) a product's picture.
+ *
+ * `image` must have come from `resizeImageFile` — this re-checks it with
+ * the same `imageProblem` the Sell grid reads it back through, so a
+ * picture that would be ignored on the tile is never written in the first
+ * place. A 3–5 MB camera file reaching IndexedDB is the failure this
+ * guards against, and the cap is deliberately enforced at the boundary
+ * rather than trusted from the caller.
+ *
+ * `update`, not `put`, so storing a photo cannot touch a name, a price, a
+ * position or a stock flag. No new Dexie version is needed: `image` is
+ * unindexed (see `src/db/db.ts`).
+ */
+export async function setProductImage(
+  id: string,
+  image: ProductImage,
+  database: PosDatabase = db,
+): Promise<void> {
+  const problem = imageProblem(image)
+  if (problem !== null) throw new Error(`That picture can't be saved: it ${problem}.`)
+  const changed = await database.products.update(id, { image })
+  if (changed === 0) throw new Error('That product no longer exists')
+}
+
+/**
+ * Take a product's picture off this device.
+ *
+ * Not a hard-delete rule violation: the rule protects orders and products,
+ * and the product row stays exactly where it is. Only the photo goes, and
+ * the tile falls back to the picture shipped in the repo, then to name and
+ * price.
+ *
+ * `modify` with an explicit `delete`, rather than `update(id, { image:
+ * undefined })`: that would lean on how a particular Dexie version treats
+ * an `undefined` value in a change set (delete the key, or skip the field
+ * entirely), and the difference between the two is whether this function
+ * works at all. `delete` leaves no doubt, and leaves no key behind.
+ */
+export async function clearProductImage(id: string, database: PosDatabase = db): Promise<void> {
+  const changed = await database.products
+    .where('id')
+    .equals(id)
+    .modify((product) => {
+      delete product.image
+    })
   if (changed === 0) throw new Error('That product no longer exists')
 }
 

@@ -124,6 +124,34 @@ describe('AdminScreen — products', () => {
     expect(screen.getByText('Archived')).toBeInTheDocument()
   })
 
+  it('offers a photo control per product, and says where photos live', async () => {
+    await database.products.bulkAdd([croissant, latte])
+    renderAdmin()
+
+    expect(await screen.findByLabelText('Add photo for Croissant')).toBeInTheDocument()
+    expect(screen.getByLabelText('Add photo for Iced Latte')).toBeInTheDocument()
+    // The owner has to know a backup will not carry these.
+    expect(screen.getByText(/not\s+included in a backup/)).toBeInTheDocument()
+  })
+
+  it('offers to replace, not add, a photo the product already has', async () => {
+    await database.products.bulkAdd([
+      {
+        ...croissant,
+        image: {
+          blob: new Blob([new Uint8Array(2048)], { type: 'image/webp' }),
+          type: 'image/webp',
+          width: 512,
+          height: 384,
+        },
+      },
+    ])
+    renderAdmin()
+
+    expect(await screen.findByLabelText('Replace photo for Croissant')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Remove photo from Croissant' })).toBeInTheDocument()
+  })
+
   it('adds a product with a price typed in baht, stored as integer satang', async () => {
     renderAdmin()
 
@@ -132,7 +160,9 @@ describe('AdminScreen — products', () => {
       target: { value: 'Almond Croissant' },
     })
     fireEvent.change(screen.getByLabelText('New product price'), { target: { value: '45.50' } })
-    fireEvent.change(screen.getByLabelText('New product category'), { target: { value: 'cookies' } })
+    fireEvent.change(screen.getByLabelText('New product category'), {
+      target: { value: 'cookies' },
+    })
     fireEvent.click(screen.getByRole('button', { name: 'Add product' }))
 
     await waitFor(async () => expect(await database.products.count()).toBe(1))

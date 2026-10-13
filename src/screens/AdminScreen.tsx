@@ -4,6 +4,7 @@ import './AdminScreen.css'
 import { BackupSection } from '../components/BackupSection'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import { PinPrompt } from '../components/PinPrompt'
+import { ProductImageField } from '../components/ProductImageField'
 import { db, type PosDatabase } from '../db/db'
 import {
   allProducts,
@@ -17,6 +18,7 @@ import { partitionSellable } from '../domain/cart'
 import { categoryLabel, CATEGORY_ORDER } from '../domain/categories'
 import { safeString } from '../domain/log'
 import { formatBaht, formatBahtInput } from '../domain/money'
+import { MAX_IMAGE_EDGE } from '../domain/productImage'
 import { isValidPromptPayId } from '../domain/promptpay'
 import {
   validateProductDraft,
@@ -333,6 +335,10 @@ function ProductAdmin({ database }: { database: PosDatabase }) {
   return (
     <section className="admin-section" aria-label="Products">
       <h2 className="admin-section-heading">Menu</h2>
+      <p className="admin-message muted">
+        Photos are stored on this phone only, shrunk to about {MAX_IMAGE_EDGE}px wide. They are not
+        included in a backup.
+      </p>
       {error && (
         <p className="checkout-error" role="alert">
           {error}
@@ -446,6 +452,7 @@ function ProductAdmin({ database }: { database: PosDatabase }) {
                   )}
                 </div>
               )}
+              <ProductImageField product={product} database={database} />
             </li>
           ),
         )}

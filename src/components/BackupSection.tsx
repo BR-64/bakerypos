@@ -183,7 +183,8 @@ export function BackupSection({ database = db }: BackupSectionProps) {
     <section className="admin-section" aria-label="Backup">
       <h2 className="admin-section-heading">Backup</h2>
       <p className="admin-message muted">
-        Everything on this phone as a file you can keep. Nothing is sent anywhere.
+        Everything on this phone as a file you can keep. Nothing is sent anywhere. Product photos
+        stay on this phone — they are not in the file, and an import never changes them.
       </p>
 
       <div className="admin-actions">
