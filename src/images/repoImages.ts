@@ -18,4 +18,14 @@
  *
  * Keys are product ids; values are file names inside `public/products/`.
  */
-export const REPO_PRODUCT_IMAGE_FILES: Record<string, string> = {}
+export const REPO_PRODUCT_IMAGE_FILES: Record<string, string> = {
+  "p-amsterdam": "p-amsterdam.png",
+  "p-brownie-9": "p-brownie-9.png",
+  "p-brownie-brittles": "p-brownie-brittles.png",
+  "p-brownie-cups": "p-brownie-cups.png",
+  "p-choc-chunk": "p-choc-chunk.PNG",
+  "p-cookie-jar": "p-cookie-jar.png",
+  "p-macadamia-choc": "p-macadamia-choc.PNG",
+  "p-manhattan": "p-manhattan.PNG",
+  "p-seasalt-choc-mud": "p-seasalt-choc-mud.PNG",
+}

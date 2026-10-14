@@ -7,7 +7,7 @@ import { ProductTile } from './ProductTile'
 // deliberately absent, so every other test here runs with no shipped
 // picture — the normal state.
 vi.mock('../images/repoImages', () => ({
-  REPO_PRODUCT_IMAGE_FILES: { 'p-shipped': 'p-shipped.webp' },
+  REPO_PRODUCT_IMAGE_FILES: { 'p-shipped': 'p-shipped.webp', 'p-upper': 'p-upper.PNG' },
 }))
 
 const croissant: Product = {
@@ -130,6 +130,39 @@ describe('ProductTile pictures', () => {
       <ProductTile product={{ ...croissant, id: 'p-shipped' }} onAdd={() => {}} />,
     )
     expect(container.querySelector('img')).toHaveAttribute('src', '/products/p-shipped.webp')
+  })
+
+  it('serves a shipped picture whose extension is upper-case with its exact file name', () => {
+    const { container } = render(
+      <ProductTile product={{ ...croissant, id: 'p-upper' }} onAdd={() => {}} />,
+    )
+    expect(container.querySelector('img')).toHaveAttribute('src', '/products/p-upper.PNG')
+  })
+
+  it('a shipped picture that fails to load (404) is dropped and the tile is still tappable', () => {
+    const onAdd = vi.fn()
+    const { container } = render(
+      <ProductTile product={{ ...croissant, id: 'p-shipped' }} onAdd={onAdd} />,
+    )
+    const img = container.querySelector('img')
+    expect(img).not.toBeNull()
+    if (img === null) return
+    fireEvent.error(img)
+    expect(container.querySelector('img')).toBeNull()
+    const button = screen.getByRole('button', { name: /Croissant/ })
+    expect(button).toHaveTextContent('฿55')
+    fireEvent.click(button)
+    expect(onAdd).toHaveBeenCalledTimes(1)
+  })
+
+  it('falls back to the shipped picture when the device photo fails, then to text when that fails too', () => {
+    const { container } = render(
+      <ProductTile product={{ ...croissant, id: 'p-shipped', image: photo() }} onAdd={() => {}} />,
+    )
+    fireEvent.error(container.querySelector('img') as HTMLImageElement)
+    expect(container.querySelector('img')).toHaveAttribute('src', '/products/p-shipped.webp')
+    fireEvent.error(container.querySelector('img') as HTMLImageElement)
+    expect(container.querySelector('img')).toBeNull()
   })
 
   it('keeps the name and the price legible alongside a picture', () => {

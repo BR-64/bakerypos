@@ -97,7 +97,7 @@ describe('useProductImage', () => {
   it('revokes the object URL when the photo is removed', () => {
     const { result, rerender } = renderHook(
       ({ product }: { product: Product }) => useProductImage(product, shipped),
-      { initialProps: { product: { ...brownie, image: photo() } } },
+      { initialProps: { product: { ...brownie, image: photo() } as Product } },
     )
     expect(result.current.src).toBe('blob:photo-1')
 
