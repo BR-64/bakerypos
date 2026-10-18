@@ -148,6 +148,23 @@ check, but it catches a broken manifest or service worker before anyone walks a 
       as — the list that is on screen after a second is the one that was saved — and note
       whether the flicker is confusing enough to need fixing.
 
+## 10b. Stock counts
+
+- [ ] Admin → a product with a photo → **Set count for …**: the phone shows the **number
+      keypad**, not the full keyboard. Enter 5, Save. The row says "Stock: 5", and the Sell tile
+      shows "Stock: 5" under the price. Products never counted show nothing on their tile.
+- [ ] Airplane mode on. Sell that product (Cash → Done). The sale completes exactly as fast as
+      before, and the tile now says "Stock: 4". **Watch the photo tiles as the screen returns
+      to Sell**: no picture blinks, reloads or shifts the grid when the count changes.
+- [ ] Still offline: Orders → that order → Void (PIN if asked). Back on Sell, the tile says
+      "Stock: 5" again.
+- [ ] Sell it down to 0 and then once more: the tile shows "Stock: 0", then "Stock: -1", in
+      bold red, and stays tappable — a count never blocks a sale or greys a tile out.
+- [ ] **+ Received for …** adds to the count; **History for …** lists Count / Sale #N / Void #N
+      / Received with the date and time, newest first. Every one of these buttons is an easy
+      thumb tap.
+- [ ] Lock Admin: none of the stock controls are reachable without the PIN.
+
 ## 11. Upgrading a device that already has data
 
 Do this on a device (or profile) that already ran an **older build** and has real orders on it
