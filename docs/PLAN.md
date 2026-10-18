@@ -340,36 +340,45 @@ salt)`, `verifyPin`, `generateRecoveryCode`), `pinHash`/`pinSalt`/`recoveryHash`
       for 60s; unlock expires after 5 minutes; recovery code resets the PIN; Sell → Cart → Cash
       never shows the prompt.
 
-- - [x] **8. PWA polish + device QA prep.** Offline indicator in the nav bar (navigator.onLine +
-        online/offline events; no network calls). Install hint on first run in a browser tab
-        ("Add to Home screen"), dismissable, never shown once installed (display-mode:
-        standalone). Icon set: 192 and 512 PNG (maskable) generated from the existing SVG and
-        referenced in the manifest. Persist the PIN lockout: store `lockedUntil` in the settings
-        row so the 60-second lock survives force-close. Write `docs/DEVICE-QA.md`: a checklist a
-        human runs on a real phone (install, airplane-mode cash and PromptPay sale, stray tap
-        after sale, 48px targets, void behind PIN, lockout, 5-minute expiry, Z report share,
-        upgrade of a device that already holds data, scan the QR with a real banking app).
-        Files: nav bar component, App.tsx (install hint), public/icons/, vite.config.ts manifest,
-        src/domain/pin.ts + settings for lockedUntil, docs/DEVICE-QA.md.
-        _Accept:_ tests — offline indicator toggles on the online/offline events; install hint
-        hidden in standalone mode; lockout survives a fresh PosDatabase open with lockedUntil in
-        the future. `npm run build` succeeds and the built manifest lists both PNG icons and the
-        service worker precaches the app shell. DEVICE-QA.md exists with every item above.
-        Phone checks themselves are done by a human after merge, not by the agents.
+- [x] **8. PWA polish + device QA prep.** Offline indicator in the nav bar (navigator.onLine +
+      online/offline events; no network calls). Install hint on first run in a browser tab
+      ("Add to Home screen"), dismissable, never shown once installed (display-mode:
+      standalone). Icon set: 192 and 512 PNG (maskable) generated from the existing SVG and
+      referenced in the manifest. Persist the PIN lockout: store `lockedUntil` in the settings
+      row so the 60-second lock survives force-close. Write `docs/DEVICE-QA.md`: a checklist a
+      human runs on a real phone (install, airplane-mode cash and PromptPay sale, stray tap
+      after sale, 48px targets, void behind PIN, lockout, 5-minute expiry, Z report share,
+      upgrade of a device that already holds data, scan the QR with a real banking app).
+      Files: nav bar component, App.tsx (install hint), public/icons/, vite.config.ts manifest,
+      src/domain/pin.ts + settings for lockedUntil, docs/DEVICE-QA.md.
+      _Accept:_ tests — offline indicator toggles on the online/offline events; install hint
+      hidden in standalone mode; lockout survives a fresh PosDatabase open with lockedUntil in
+      the future. `npm run build` succeeds and the built manifest lists both PNG icons and the
+      service worker precaches the app shell. DEVICE-QA.md exists with every item above.
+      Phone checks themselves are done by a human after merge, not by the agents.
 
-- [ ] **8b. Backup and export.** Admin → Backup: "Export" builds `bakery-pos-YYYY-MM-DD.json`
+- [x] **8b. Backup and export.** Admin → Backup: "Export" builds `bakery-pos-YYYY-MM-DD.json`
+      (products, orders, settings without pinHash/pinSalt/recoveryHash/lockedUntil) plus
+      `orders-YYYY-MM-DD.csv` (one row per order line: order number, time, product, qty,
+      unit price in baht, line total, payment method, status) and offers both via the share
+      sheet, falling back to a download link. "Import" reads a JSON export, validates it,
+      shows a summary (N products, N orders, N new / N already present), then merges by id in
+      one transaction — never overwrites an existing order, never touches PIN fields. Pure
+      `buildExport` / `parseImport` in `src/domain/backup.ts`; behind the PIN.
+      _Accept:_ tests — export → import on an empty database reproduces every product and
+      order exactly; importing the same file twice adds nothing; a file with a corrupt order
+      is rejected whole with no partial write; CSV totals equal the Z report totals for the
+      same day; money stays integer satang in JSON and two-decimal baht in CSV.
 
-  (products, orders, settings without pinHash/pinSalt/recoveryHash/lockedUntil) plus
-  `orders-YYYY-MM-DD.csv` (one row per order line: order number, time, product, qty,
-  unit price in baht, line total, payment method, status) and offers both via the share
-  sheet, falling back to a download link. "Import" reads a JSON export, validates it,
-  shows a summary (N products, N orders, N new / N already present), then merges by id in
-  one transaction — never overwrites an existing order, never touches PIN fields. Pure
-  `buildExport` / `parseImport` in `src/domain/backup.ts`; behind the PIN.
-  _Accept:_ tests — export → import on an empty database reproduces every product and
-  order exactly; importing the same file twice adds nothing; a file with a corrupt order
-  is rejected whole with no partial write; CSV totals equal the Z report totals for the
-  same day; money stays integer satang in JSON and two-decimal baht in CSV.
+- [x] **8c. Menu + product pictures** (done outside the task flow; recorded here so the plan
+      matches the code). Categories are now `brownies | cookies | jar | other` with a new
+      starter menu. Optional `Product.image` (`ProductImage`: a downscaled `Blob` + type +
+      width/height) uploaded in Admin via `ProductImageField` and `src/images/resizeImage.ts`;
+      stored unindexed on the v1 `products` store, so no schema bump; deliberately left out of
+      backups and never copied onto an `OrderLine`. `useProductImage` resolves device photo →
+      shipped `public/products/<id>.<ext>` (build-time map in `src/images/repoImages.ts`) →
+      text-only tile; a corrupt photo is skipped and logged once, a decode failure falls back
+      silently.
 
 - [ ] **9. (Later) Backend sync.** Minimal Node/Hono API with SQLite, `POST /orders` upsert by
       id, `useSync` pushes `pending` orders when online and marks them `synced`. Owner dashboard
