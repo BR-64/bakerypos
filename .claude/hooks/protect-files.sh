@@ -2,7 +2,7 @@
 # PreToolUse hook: block edits to files agents must never touch.
 # Exit 2 = block the tool call and feed the message back to the agent.
 INPUT=$(cat)
-FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty')
+FILE_PATH=$(printf '%s' "$INPUT" | node "$CLAUDE_PROJECT_DIR/.claude/hooks/json-get.cjs" tool_input.file_path)
 [ -z "$FILE_PATH" ] && exit 0
 FILE_PATH="${FILE_PATH//\\//}"
 

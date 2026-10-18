@@ -4,7 +4,7 @@
 # Only runs when source files changed, so a chat-only turn is not slowed down.
 INPUT=$(cat)
 # Avoid infinite loops: if we already blocked once this turn, let it stop.
-if [ "$(echo "$INPUT" | jq -r '.stop_hook_active // false')" = "true" ]; then
+if [ "$(printf '%s' "$INPUT" | node "$CLAUDE_PROJECT_DIR/.claude/hooks/json-get.cjs" stop_hook_active)" = "true" ]; then
   exit 0
 fi
 cd "$CLAUDE_PROJECT_DIR" || exit 0
