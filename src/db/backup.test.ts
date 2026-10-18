@@ -7,6 +7,7 @@ import { importBackup, previewImport } from './backup'
 import { PosDatabase } from './db'
 import { completeOrder, todaysOrders } from './orders'
 import { getSettings, saveSettings } from './settings'
+import { setStockCount } from './stock'
 
 let source: PosDatabase
 let target: PosDatabase
@@ -153,6 +154,42 @@ describe('export → import on an empty database', () => {
     expect(second).toMatchObject({ newOrders: 0, existingOrders: 2, newProducts: 0 })
     await expect(target.orders.count()).resolves.toBe(2)
     await expect(target.products.count()).resolves.toBe(2)
+  })
+})
+
+describe('stock stays on this phone (task 8d)', () => {
+  it('the exported file has no stock and no movements', async () => {
+    await seedSource()
+    await setStockCount('p-croissant', 5, source)
+    await completeOrder(
+      [{ productId: 'p-croissant', name: 'Croissant', unitPrice: 5500, qty: 1 }],
+      { method: 'cash', tendered: 5500, change: 0 },
+      source,
+    )
+    expect((await source.products.get('p-croissant'))?.stock).toBe(4)
+    expect(await source.stockMovements.count()).toBe(2)
+
+    const text = JSON.stringify(await exportFromSource(), null, 2)
+
+    // `"outOfStock"` is a real backup field; the count's key is exactly `"stock"`.
+    expect(text).not.toContain('"stock"')
+    expect(text).not.toMatch(/movement/i)
+    const parsed = JSON.parse(text) as BackupPayload
+    for (const product of parsed.products) expect(product).not.toHaveProperty('stock')
+    expect(Object.keys(parsed).sort()).toEqual(
+      ['dayKey', 'exportedAt', 'format', 'orders', 'products', 'settings', 'version'].sort(),
+    )
+  })
+
+  it('importing orders never moves stock', async () => {
+    await seedSource()
+    const payload = await exportFromSource()
+    await target.products.add({ ...croissant, stock: 10 })
+
+    await importBackup(payload, target, { replaceDetails: true })
+
+    expect((await target.products.get('p-croissant'))?.stock).toBe(10)
+    expect(await target.stockMovements.count()).toBe(0)
   })
 })
 
@@ -332,6 +369,47 @@ describe('importBackup — product details are opt-in', () => {
     await importBackup(payload, target)
 
     expect((await target.products.get('p-croissant'))?.image?.blob.size).toBe(2048)
+  })
+
+  it('keeps the stock count (and the photo) when details are replaced', async () => {
+    const payload = await targetWithOwnPrice()
+    await target.products.update('p-croissant', {
+      stock: 7,
+      image: {
+        blob: new Blob([new Uint8Array(1024)], { type: 'image/webp' }),
+        type: 'image/webp',
+        width: 512,
+        height: 384,
+      },
+    })
+
+    const summary = await importBackup(payload, target, { replaceDetails: true })
+
+    const stored = await target.products.get('p-croissant')
+    expect(summary.replacedProducts).toBe(1)
+    expect(stored?.price).toBe(9900)
+    expect(stored?.stock).toBe(7)
+    expect(stored?.image?.blob.size).toBe(1024)
+  })
+
+  it('keeps the stock count when details are not replaced, and a new product arrives untracked', async () => {
+    const payload = await targetWithOwnPrice()
+    await target.products.update('p-croissant', { stock: -2 })
+
+    await importBackup(payload, target)
+
+    expect((await target.products.get('p-croissant'))?.stock).toBe(-2)
+    expect(await target.products.get('p-sourdough')).not.toHaveProperty('stock')
+  })
+
+  it('a stock count alone never makes a product look changed', async () => {
+    await seedSource()
+    const payload = await exportFromSource()
+    await target.products.add({ ...croissant, stock: 3 })
+
+    const summary = await previewImport(payload, target)
+
+    expect(summary.changedProducts).toBe(0)
   })
 
   it('a product arriving from a backup simply has no picture', async () => {

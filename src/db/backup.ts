@@ -81,7 +81,7 @@ interface ProductComparison {
   known: Set<string>
   changed: Product[]
   priceChanges: PriceChange[]
-  /** The stored row for each id the device already has, for `keepingImages`. */
+  /** The stored row for each id the device already has, for `keepingDeviceFields`. */
   stored: Map<string, Product>
 }
 
@@ -117,21 +117,27 @@ async function compareProducts(
 }
 
 /**
- * The file's products, each carrying forward the picture already on this
- * phone.
+ * The file's products, each carrying forward the device-only fields already
+ * on this phone: the picture and the stock count (task 8d).
  *
- * A backup never contains pictures (they are device-only — see
- * `buildExport`'s allowlist), and replacing product details is a `put`,
- * which writes the whole row. Without this, ticking "also replace product
- * details" would silently wipe every photo the owner had taken — a
+ * A backup never contains either (see `buildExport`'s allowlist), and
+ * replacing product details is a `put`, which writes the whole row. Without
+ * this, ticking "also replace product details" would silently wipe every
+ * photo the owner had taken and stop tracking every counted product — a
  * destructive side effect of a choice that is only supposed to be about
- * names, prices, categories and positions. `sameProduct` ignores `image`
- * for the same reason, so a photo never makes a product look "changed".
+ * names, prices, categories and positions. `sameProduct` ignores both for
+ * the same reason, so neither makes a product look "changed". The stored
+ * `stock` is carried as-is, even if unreadable: Admin's "Set count" is the
+ * repair for that, not an import. Stock history isn't touched at all.
  */
-function keepingImages(products: Product[], stored: Map<string, Product>): Product[] {
+function keepingDeviceFields(products: Product[], stored: Map<string, Product>): Product[] {
   return products.map((product) => {
-    const image = stored.get(product.id)?.image
-    return image === undefined ? product : { ...product, image }
+    const current = stored.get(product.id)
+    if (current === undefined) return product
+    const kept: Product = { ...product }
+    if (current.image !== undefined) kept.image = current.image
+    if (current.stock !== undefined) kept.stock = current.stock
+    return kept
   })
 }
 
@@ -278,7 +284,7 @@ export async function importBackup(
       if (newOrders.length > 0) await database.orders.bulkAdd(newOrders)
       if (replaceDetails) {
         if (valid.products.length > 0) {
-          await database.products.bulkPut(keepingImages(valid.products, products.stored))
+          await database.products.bulkPut(keepingDeviceFields(valid.products, products.stored))
         }
       } else if (newProducts.length > 0) {
         await database.products.bulkAdd(newProducts)
