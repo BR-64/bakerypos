@@ -1,6 +1,6 @@
 import Dexie, { type EntityTable } from 'dexie'
 import type { Settings } from '../domain/settings'
-import type { Order, Product } from '../domain/types'
+import type { Order, Product, StockMovement } from '../domain/types'
 
 /**
  * Local-first store. Everything the kiosk needs lives here; the server is a
@@ -15,6 +15,7 @@ export class PosDatabase extends Dexie {
   products!: EntityTable<Product, 'id'>
   orders!: EntityTable<Order, 'id'>
   settings!: EntityTable<Settings, 'id'>
+  stockMovements!: EntityTable<StockMovement, 'id'>
 
   constructor(name = 'bakery-pos') {
     super(name)
@@ -47,6 +48,19 @@ export class PosDatabase extends Dexie {
     // the first save creates the row.
     this.version(2).stores({
       settings: 'id',
+    })
+    // v3 (task 8d): the append-only stock history.
+    //
+    // The count itself is `Product.stock`, unindexed on the v1 `products`
+    // store like `image`, so `products` needs no new version. As in v2, the
+    // existing stores are not re-listed (a re-typed index string is a silent
+    // index loss on every device). No `upgrade()`: every product on an
+    // upgraded device simply has no `stock` key, i.e. is untracked.
+    //
+    // `orderId` finds a sale's movements when it is voided;
+    // `[productId+createdAt]` is Admin's per-product history, newest first.
+    this.version(3).stores({
+      stockMovements: 'id, orderId, [productId+createdAt]',
     })
   }
 }

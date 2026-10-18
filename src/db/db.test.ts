@@ -100,16 +100,21 @@ async function seedV1(name: string): Promise<void> {
   v1.close()
 }
 
-describe('PosDatabase schema v1 -> v2', () => {
-  it('upgrades an existing v1 database to v2 and adds the settings store', async () => {
+describe('PosDatabase schema v1 -> current', () => {
+  it('upgrades an existing v1 database to the current version and adds the settings store', async () => {
     const name = `test-${Math.random()}`
     await seedV1(name)
 
     const database = new PosDatabase(name)
     await database.open()
 
-    expect(database.verno).toBe(2)
-    expect(database.tables.map((t) => t.name).sort()).toEqual(['orders', 'products', 'settings'])
+    expect(database.verno).toBe(3)
+    expect(database.tables.map((t) => t.name).sort()).toEqual([
+      'orders',
+      'products',
+      'settings',
+      'stockMovements',
+    ])
     database.close()
   })
 
@@ -211,20 +216,105 @@ describe('PosDatabase upgrading around a still-open v1 connection', () => {
       clearTimeout(timer)
     }
 
-    expect(database.verno).toBe(2)
+    expect(database.verno).toBe(3)
     expect(await database.orders.count()).toBe(v1Orders.length)
     v1.close()
     database.close()
   })
 })
 
+/**
+ * A genuine schema-v2 database: a bare `Dexie` declaring exactly the v1 and
+ * v2 blocks that shipped, so reopening it with `PosDatabase` really runs
+ * the v2 → v3 upgrade (task 8d) rather than creating v3 from scratch.
+ */
+function openV2(name: string): Dexie {
+  const v2 = new Dexie(name)
+  v2.version(1).stores({
+    products: 'id, category, sortOrder',
+    orders: 'id, number, createdAt, status, sync',
+  })
+  v2.version(2).stores({
+    settings: 'id',
+  })
+  return v2
+}
+
+const v2Settings: Settings = {
+  ...DEFAULT_SETTINGS,
+  shopName: 'Sunrise Bakery',
+  promptPayId: '0812345678',
+}
+
+describe('PosDatabase schema v2 -> v3 (stock movements)', () => {
+  async function seedV2(name: string): Promise<void> {
+    const v2 = openV2(name)
+    await v2.open()
+    expect(v2.verno).toBe(2)
+    await v2.table('products').bulkAdd(v1Products)
+    await v2.table('orders').bulkAdd(v1Orders)
+    await v2.table('settings').add(v2Settings)
+    v2.close()
+  }
+
+  it('upgrades to v3 with every row unchanged and every product untracked', async () => {
+    const name = `test-${Math.random()}`
+    await seedV2(name)
+
+    const database = new PosDatabase(name)
+    await database.open()
+
+    expect(database.verno).toBe(3)
+    expect(await database.products.orderBy('id').toArray()).toEqual(v1Products)
+    expect(await database.orders.orderBy('id').toArray()).toEqual(v1Orders)
+    expect(await database.settings.toArray()).toEqual([v2Settings])
+    for (const product of await database.products.toArray()) {
+      expect(product).not.toHaveProperty('stock')
+    }
+    database.close()
+  })
+
+  it('keeps the v1 indexes working and makes stockMovements usable', async () => {
+    const name = `test-${Math.random()}`
+    await seedV2(name)
+
+    const database = new PosDatabase(name)
+    await database.open()
+
+    expect((await ordersForDay(database, day)).map((o) => o.id)).toEqual(['o-2', 'o-1'])
+    expect(await database.stockMovements.count()).toBe(0)
+    await database.stockMovements.add({
+      id: 'm-1',
+      productId: 'p-croissant',
+      kind: 'set',
+      delta: 5,
+      level: 5,
+      previous: null,
+      createdAt: new Date(2026, 0, 15, 9, 0).toISOString(),
+    })
+    expect(await database.stockMovements.where('orderId').equals('o-1').count()).toBe(0)
+    expect(
+      await database.stockMovements
+        .where('[productId+createdAt]')
+        .between(['p-croissant', Dexie.minKey], ['p-croissant', Dexie.maxKey])
+        .count(),
+    ).toBe(1)
+    database.close()
+  })
+})
+
 describe('PosDatabase on a fresh device', () => {
-  it('opens straight at version 2 with all three stores', async () => {
+  it('opens straight at version 3 with all four stores', async () => {
     const database = new PosDatabase(`test-${Math.random()}`)
     await database.open()
 
-    expect(database.verno).toBe(2)
-    expect(database.tables.map((t) => t.name).sort()).toEqual(['orders', 'products', 'settings'])
+    expect(database.verno).toBe(3)
+    expect(database.tables.map((t) => t.name).sort()).toEqual([
+      'orders',
+      'products',
+      'settings',
+      'stockMovements',
+    ])
     database.close()
   })
 })
