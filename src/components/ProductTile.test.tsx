@@ -108,6 +108,79 @@ describe('ProductTile', () => {
   })
 })
 
+describe('ProductTile stock', () => {
+  it('shows "Stock: 5" under the price for a tracked product', () => {
+    render(<ProductTile product={{ ...croissant, stock: 5 }} onAdd={() => {}} />)
+    const button = screen.getByRole('button', { name: /Croissant/ })
+    const label = button.querySelector('.tile-stock')
+    expect(label).toHaveTextContent('Stock: 5')
+    expect(label).not.toHaveClass('tile-stock-low')
+    // Under the price: it comes after the <strong> in the tile.
+    expect(button.querySelector('strong + .tile-stock')).toBe(label)
+  })
+
+  it('keeps the name unchanged and reads the count as the description', () => {
+    render(<ProductTile product={{ ...croissant, stock: 5 }} onAdd={() => {}} />)
+    const button = screen.getByRole('button', { name: /Croissant/ })
+    expect(button).toHaveAccessibleName('Croissant ฿55')
+    expect(button).toHaveAccessibleDescription('Stock: 5')
+  })
+
+  it('shows nothing for an untracked product', () => {
+    render(<ProductTile product={croissant} onAdd={() => {}} />)
+    const button = screen.getByRole('button', { name: /Croissant/ })
+    expect(button.querySelector('.tile-stock')).toBeNull()
+    expect(button).not.toHaveTextContent('Stock')
+    // Named from its content exactly as before stock existed.
+    expect(button).not.toHaveAttribute('aria-labelledby')
+    expect(button).not.toHaveAttribute('aria-describedby')
+  })
+
+  it.each([0, -3])('marks %i as low, and the tile stays tappable', (level) => {
+    const onAdd = vi.fn()
+    render(<ProductTile product={{ ...croissant, stock: level }} onAdd={onAdd} />)
+    const button = screen.getByRole('button', { name: /Croissant/ })
+    const label = button.querySelector('.tile-stock')
+    expect(label).toHaveTextContent(`Stock: ${level}`)
+    expect(label).toHaveClass('tile-stock-low')
+    expect(button).toBeEnabled()
+    expect(button).not.toHaveClass('tile-disabled')
+    fireEvent.click(button)
+    expect(onAdd).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows the count on a Sold-out tile too, which keeps "Sold out" in its name', () => {
+    render(<ProductTile product={{ ...croissant, stock: 4, outOfStock: true }} onAdd={() => {}} />)
+    const button = screen.getByRole('button', { name: /Croissant/ })
+    expect(button).toBeDisabled()
+    expect(button.querySelector('.tile-stock')).toHaveTextContent('Stock: 4')
+    expect(button).toHaveAccessibleName('Croissant ฿55 Sold out')
+    expect(button).toHaveAccessibleDescription('Stock: 4')
+  })
+
+  it.each([
+    ['NaN', Number.NaN],
+    ['1.5', 1.5],
+    ["'5'", '5'],
+    ['1e300', 1e300],
+    ['null', null],
+  ])('renders a corrupt count (%s) as untracked, stays sellable, and never logs', (_, stock) => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const onAdd = vi.fn()
+    render(
+      <ProductTile product={{ ...croissant, stock: stock as unknown as number }} onAdd={onAdd} />,
+    )
+    const button = screen.getByRole('button', { name: /Croissant/ })
+    expect(button.querySelector('.tile-stock')).toBeNull()
+    expect(button).not.toHaveAttribute('aria-describedby')
+    fireEvent.click(button)
+    expect(onAdd).toHaveBeenCalledTimes(1)
+    // SellScreen logs it once; the tile stays silent.
+    expect(errorSpy).not.toHaveBeenCalled()
+    errorSpy.mockRestore()
+  })
+})
+
 describe('ProductTile pictures', () => {
   it('renders no <img> at all for a product with no picture — the normal state', () => {
     const { container } = render(<ProductTile product={croissant} onAdd={() => {}} />)

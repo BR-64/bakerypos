@@ -121,6 +121,21 @@ body,
   text-transform: uppercase;
 }
 
+/* Stock count under the price (task 8d), for tracked products only.
+   Informational: it never greys out or disables a tile. At zero or below
+   it turns bold and red, so "none left" reads by weight as well as by
+   colour. */
+.tile-stock {
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.tile-stock-low {
+  color: #b3261e;
+  font-weight: 700;
+}
+
 .category-tabs {
   display: flex;
   gap: 8px;

@@ -1,5 +1,7 @@
+import { useId } from 'react'
 import { isSellable } from '../domain/cart'
 import { formatBaht } from '../domain/money'
+import { readStock, stockLabel } from '../domain/stock'
 import type { Product } from '../domain/types'
 import { useProductImage } from '../hooks/useProductImage'
 
@@ -12,7 +14,8 @@ export interface ProductTileProps {
  * One tile in the Sell screen grid. Tapping an in-stock, well-formed
  * product calls `onAdd`. The button's accessible name is its visible text,
  * which always includes the product name and (when valid) the formatted
- * price.
+ * price — except a tracked stock count, which is the button's description
+ * rather than part of its name.
  *
  * `SellScreen` filters invalid products out before they ever reach this
  * component (via `partitionSellable`, which also logs them) — invalid data
@@ -50,6 +53,34 @@ export function ProductTile({ product, onAdd }: ProductTileProps) {
 function SellableTile({ product, onAdd }: ProductTileProps) {
   const picture = useProductImage(product)
   const priceLabel = formatBaht(product.price)
+  const ids = useId()
+  const nameId = `${ids}-name`
+  const priceId = `${ids}-price`
+  const soldOutId = `${ids}-sold-out`
+  const stockId = `${ids}-stock`
+
+  // Informational only (task 8d): a count never disables a tile, and an
+  // untracked or unreadable count shows nothing. `SellScreen` logs the
+  // unreadable ones once; the tile stays silent.
+  const reading = readStock(product)
+  const stock = reading.kind === 'tracked' ? stockLabel(reading.level) : null
+  const stockLine =
+    stock === null ? null : (
+      <span id={stockId} className={stock.low ? 'tile-stock tile-stock-low' : 'tile-stock'}>
+        {stock.text}
+      </span>
+    )
+  // With a count shown, the button's name is pinned to exactly what it was
+  // before stock existed ("Croissant ฿55", plus "Sold out") and the count
+  // is its description instead — a screen reader still hears it, after the
+  // name, and nothing that finds a tile by its name changes as stock moves.
+  const labelling = (soldOut: boolean) =>
+    stock === null
+      ? {}
+      : {
+          'aria-labelledby': [nameId, priceId, ...(soldOut ? [soldOutId] : [])].join(' '),
+          'aria-describedby': stockId,
+        }
 
   const media =
     picture.src === null ? null : (
@@ -70,20 +101,24 @@ function SellableTile({ product, onAdd }: ProductTileProps) {
 
   if (product.outOfStock === true) {
     return (
-      <button type="button" className="tile tile-disabled" disabled>
+      <button type="button" className="tile tile-disabled" disabled {...labelling(true)}>
         {media}
-        <span>{product.name}</span>
-        <strong>{priceLabel}</strong>
-        <span className="tile-sold-out">Sold out</span>
+        <span id={nameId}>{product.name}</span>
+        <strong id={priceId}>{priceLabel}</strong>
+        {stockLine}
+        <span id={soldOutId} className="tile-sold-out">
+          Sold out
+        </span>
       </button>
     )
   }
 
   return (
-    <button type="button" className="tile" onClick={() => onAdd(product)}>
+    <button type="button" className="tile" onClick={() => onAdd(product)} {...labelling(false)}>
       {media}
-      <span>{product.name}</span>
-      <strong>{priceLabel}</strong>
+      <span id={nameId}>{product.name}</span>
+      <strong id={priceId}>{priceLabel}</strong>
+      {stockLine}
     </button>
   )
 }

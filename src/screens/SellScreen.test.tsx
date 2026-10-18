@@ -263,6 +263,74 @@ describe('SellScreen', () => {
     errorSpy.mockRestore()
   })
 
+  it('shows the count on tracked tiles only, and adding to the cart never changes it', async () => {
+    await database.products.bulkAdd([
+      { ...fixtures[0], stock: 5 },
+      { ...fixtures[1], stock: 0 },
+      fixtures[3],
+    ])
+    render(<Harness db={database} />)
+
+    const croissant = await screen.findByRole('button', { name: /Croissant/ })
+    expect(croissant).toHaveAccessibleDescription('Stock: 5')
+    // Sold out and at zero: still shows its count.
+    const cookie = screen.getByRole('button', { name: /Cookie/ })
+    expect(cookie.querySelector('.tile-stock-low')).toHaveTextContent('Stock: 0')
+    expect(screen.getByRole('button', { name: /Baguette/ }).querySelector('.tile-stock')).toBeNull()
+
+    // Stock drops when a sale is confirmed, not when an item goes in the cart.
+    fireEvent.click(croissant)
+    await waitFor(() => expect(cartBarTotalText()).toBe('฿55'))
+    expect(croissant).toHaveAccessibleDescription('Stock: 5')
+    expect((await database.products.get('p-croissant'))?.stock).toBe(5)
+  })
+
+  it('updates a tile live when the stored count changes', async () => {
+    await database.products.add({ ...fixtures[0], stock: 5 })
+    render(<Harness db={database} />)
+    const croissant = await screen.findByRole('button', { name: /Croissant/ })
+
+    await database.products.update('p-croissant', { stock: 4 })
+
+    await waitFor(() => expect(croissant).toHaveAccessibleDescription('Stock: 4'))
+  })
+
+  it('renders a corrupt count as untracked, keeps the tile sellable, and logs it once per id', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    await database.products.bulkAdd([
+      { ...fixtures[0], stock: 'abc' as unknown as number },
+      { ...fixtures[3], stock: 1.5 },
+    ])
+    render(<Harness db={database} />)
+
+    const croissant = await screen.findByRole('button', { name: /Croissant/ })
+    expect(croissant.querySelector('.tile-stock')).toBeNull()
+    expect(screen.getByRole('button', { name: /Baguette/ }).querySelector('.tile-stock')).toBeNull()
+
+    const logsFor = (id: string) =>
+      errorSpy.mock.calls.filter(
+        (args) => typeof args[0] === 'string' && args[0].includes(`stock on product ${id}`),
+      ).length
+    await waitFor(() => {
+      expect(logsFor('p-croissant')).toBe(1)
+      expect(logsFor('p-baguette')).toBe(1)
+    })
+
+    // Taps and a tab switch rerender the grid; the log doesn't repeat.
+    fireEvent.click(croissant)
+    await waitFor(() => expect(cartBarTotalText()).toBe('฿55'))
+    fireEvent.click(screen.getByRole('tab', { name: 'Brownies' }))
+    fireEvent.click(screen.getByRole('tab', { name: 'All' }))
+    fireEvent.click(screen.getByRole('button', { name: /Croissant/ }))
+    await waitFor(() => expect(cartBarTotalText()).toBe('฿110'))
+    expect(logsFor('p-croissant')).toBe(1)
+    expect(logsFor('p-baguette')).toBe(1)
+    // Nothing else was logged: a product with a bad count is not an invalid product.
+    expect(errorSpy).toHaveBeenCalledTimes(2)
+
+    errorSpy.mockRestore()
+  })
+
   it('the cart bar stays visible with its total when the product query rejects, and "Try again" recovers once it succeeds', async () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     let calls = 0

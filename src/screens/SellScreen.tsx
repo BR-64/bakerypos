@@ -14,6 +14,7 @@ import {
   type CategoryTab,
 } from '../domain/categories'
 import { safeString } from '../domain/log'
+import { readStock } from '../domain/stock'
 import type { Category, Product } from '../domain/types'
 import type { Cart } from '../hooks/useCart'
 import { useLogInvalidOnce } from '../hooks/useLogInvalidOnce'
@@ -92,12 +93,34 @@ function describeInvalidProduct(product: Product): string {
   )
 }
 
+/**
+ * Dedup key for a sellable product whose stored stock is unreadable. The
+ * `stock:` prefix keeps it apart from the invalid-product keys above — each
+ * call to `useLogInvalidOnce` has its own set, but a distinct key makes the
+ * log line's subject unmistakable too.
+ */
+function invalidStockKey(product: Product): string {
+  return `stock:${product.id}`
+}
+
+function describeInvalidStock(product: Product): string {
+  return (
+    `SellScreen: ignoring unreadable stock on product ${product.id} — ` +
+    `stock=${safeString(product.stock)} (shown as untracked; Admin's "Set count" repairs it)`
+  )
+}
+
 function ProductGrid({ cart, database, categoryOrder }: ProductGridProps) {
   const [selectedTab, setSelectedTab] = useState<CategoryTab>('all')
   const products = useLiveQuery(() => sellableProducts(database), [database])
 
   const { sellable, invalid } = partitionSellable(products ?? [])
   useLogInvalidOnce(invalid, invalidProductKey, describeInvalidProduct)
+  // An unreadable count never hides or disables a tile — the tile just
+  // shows no count — but it is logged, once per product, here rather than
+  // in the tile (which re-renders far too often to log).
+  const invalidStock = sellable.filter((product) => readStock(product).kind === 'invalid')
+  useLogInvalidOnce(invalidStock, invalidStockKey, describeInvalidStock)
 
   if (products === undefined) {
     return <p className="sell-screen-message muted">Loading menu…</p>
