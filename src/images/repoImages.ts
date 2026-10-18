@@ -20,6 +20,7 @@
  */
 export const REPO_PRODUCT_IMAGE_FILES: Record<string, string> = {
   "p-amsterdam": "p-amsterdam.png",
+  "p-brownie-21": "p-brownie-21.png",
   "p-brownie-9": "p-brownie-9.png",
   "p-brownie-brittles": "p-brownie-brittles.png",
   "p-brownie-cups": "p-brownie-cups.png",

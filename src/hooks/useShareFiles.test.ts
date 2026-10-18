@@ -136,6 +136,9 @@ describe('useShareFiles — the download fallback', () => {
   })
 
   it('falls back to a data URL when object URLs are unavailable', () => {
+    // Remove them explicitly: the test environment may expose Node's URL,
+    // which does have createObjectURL.
+    Object.defineProperty(URL, 'createObjectURL', { value: undefined, configurable: true })
     const { result } = renderHook(() => useShareFiles())
 
     act(() => {

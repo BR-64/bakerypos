@@ -72,10 +72,12 @@ describe('useProductImage', () => {
     expect(created[0]).toBe(product.image?.blob)
   })
 
+  // Build the product outside the render callback, as the live query does: a
+  // fresh Blob on every render would create a new object URL, set state and
+  // render again, forever.
   it('revokes the object URL on unmount', () => {
-    const { result, unmount } = renderHook(() =>
-      useProductImage({ ...brownie, image: photo() }, {}),
-    )
+    const product = { ...brownie, image: photo() }
+    const { result, unmount } = renderHook(() => useProductImage(product, {}))
     expect(result.current.src).toBe('blob:photo-1')
     unmount()
     expect(revoked).toEqual(['blob:photo-1'])
@@ -136,7 +138,8 @@ describe('useProductImage', () => {
 
   it('drops to the shipped picture, then to nothing, as each source fails to decode', () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const { result } = renderHook(() => useProductImage({ ...brownie, image: photo() }, shipped))
+    const product = { ...brownie, image: photo() }
+    const { result } = renderHook(() => useProductImage(product, shipped))
     expect(result.current.src).toBe('blob:photo-1')
 
     act(() => result.current.onError())
@@ -160,7 +163,8 @@ describe('useProductImage', () => {
     URL.createObjectURL = () => {
       throw new Error('not supported')
     }
-    const { result } = renderHook(() => useProductImage({ ...brownie, image: photo() }, shipped))
+    const product = { ...brownie, image: photo() }
+    const { result } = renderHook(() => useProductImage(product, shipped))
     expect(result.current.src).toBe('/products/p-brownie-9.webp')
   })
 })
