@@ -380,6 +380,122 @@ salt)`, `verifyPin`, `generateRecoveryCode`), `pinHash`/`pinSalt`/`recoveryHash`
       text-only tile; a corrupt photo is skipped and logged once, a decode failure falls back
       silently.
 
+- [ ] **8d. Stock tracking.** Two PRs, merged in order; tick at the second merge. Owner
+      decisions: only Admin (behind the PIN) adjusts stock; stock may go below 0 and never
+      blocks a sale; stock drops when a sale is confirmed (not when added to the cart); a void
+      adds back exactly what that sale removed; tracking is opt-in per product; the Sell tile
+      shows an informational count; Admin has "Set count" + "+ Received" with a history log;
+      no "stop tracking" in this task; stock never changes the manual `outOfStock` toggle.
+      `docs/SPEC.md`: Non-goals "Inventory tracking" → "Inventory beyond per-product counts";
+      describe Stock under Admin and Sell.
+      **Model — count on the product, log is history only.** `Product.stock?: number`
+      (unindexed, so no new version for `products`, same as `image` in 8c). Absent =
+      _untracked_; new/edited/existing products stay untracked until Admin's "Set count". Not
+      derived from movements: `sellableProducts` already reads every product row, so a stored
+      count is free on the phone, while summing an append-only log (~100k rows/year) per tile
+      would grow without bound and depend on rows a prune or partial import could lose.
+      `StockMovement { id; productId; kind: 'sale' | 'void' | 'set' | 'received'; delta /*
+    signed safe integer */; level /* after */; previous: number | null /* null = untracked
+    or unreadable */; createdAt /* toISOString() */; orderId?; orderNumber? }` in
+      `types.ts`. `src/db/db.ts`: new `.version(3).stores({ stockMovements: 'id, orderId,
+    [productId+createdAt]' })`; versions 1–2 byte-identical; `products`/`orders`/`settings`
+      not re-listed (7a's reasoning); no `upgrade()` — every device upgrades all-untracked.
+      **Domain** `src/domain/stock.ts` (no React, no Dexie): `readStock(value: unknown)` →
+      `{kind:'untracked'} | {kind:'tracked', level} | {kind:'invalid'}` (missing key =
+      untracked; present but not a safe integer — `NaN`, `1.5`, `'5'`, `1e300`, `null` — =
+      invalid, treated as untracked everywhere). `MAX_STOCK_INPUT = 100_000`;
+      `parseStockCount(text)` digits only 0..max, `parseReceivedQty(text)` digits only 1..max,
+      each `{ok, value} | {ok:false, error}`. `saleQuantities(lines: unknown)` sums qty per
+      `productId` over the `partitionCartLines` valid subset. `planStockChanges({ rows,
+    deltas, kind, at, newId, orderId?, orderNumber? })` → `{ updates, movements, skipped }`,
+      never throws: untracked rows ignored silently; missing row, invalid stock, or a level
+      that would leave safe-integer range → `skipped` with a reason, product not written.
+      `isValidStockMovement` / `partitionStockMovements`. `stockLabel(level)` →
+      `{ text: 'Stock: 5', low: level <= 0 }`.
+      **Data** `src/db/stock.ts`: `setStockCount(id, count, db)` and `receiveStock(id, qty,
+    db)` — each one `rw` transaction over `products` + `stockMovements`, re-reading the row
+      inside it, writing with `update` (never `put`), appending one movement. `receiveStock`
+      rejects untracked/unreadable ("Set a count first"); `setStockCount` is the repair path
+      for unreadable stock (`previous: null`, `delta = count`) and logs a delta-0 movement for
+      a same-value stocktake. Both reject a missing product; archived products allowed.
+      `stockHistory(id, db, limit = 50)` via `[productId+createdAt]` between
+      `[id, Dexie.minKey]`/`[id, Dexie.maxKey]`, `.reverse().limit(limit)`.
+      `applySaleStock(db, order)` / `applyVoidStock(db, order)` for `orders.ts` only — called
+      inside the caller's transaction, awaiting nothing but Dexie.
+      **Minimal change to `completeOrder`/`voidOrder`** (lifts tasks 6/7a's "don't touch" for
+      these two only). `completeOrder`: validation unchanged; transaction tables grow from
+      `orders` to `orders, products, stockMovements`; after `orders.add(order)`,
+      `await applySaleStock(database, order)` (`delta = -qty`, `createdAt` = the order's);
+      return value unchanged; `skipped` logged with `console.error` _after_ commit.
+      `voidOrder` becomes one `rw` transaction over the same three tables: `get(id)` (missing
+      still throws `Order … not found`); already `'voided'` → return without writing
+      (`voidedAt`/`voidReason` untouched, no stock moves — guard in the db, not only the UI);
+      otherwise today's field update, then `applyVoidStock`, which reverses exactly the
+      `kind:'sale'` movements for this `orderId` and does nothing if a `kind:'void'` movement
+      for it already exists. An order sold while untracked has no sale movements, so its void
+      changes nothing. `useCompleteOrder`, `useVoidOrder`, `OrdersScreen` and every checkout
+      screen unchanged.
+      **Stock never fails a sale for bad data.** Every data problem (missing/corrupt row,
+      invalid stock, overflow) is decided in pure code before any write and skipped + logged.
+      No try/catch around the Dexie writes inside the transaction: a failing write there is
+      the same IndexedDB the order lives in, aborts the whole transaction exactly like a
+      failing `orders.add` today (cart kept, hook shows its error, retry stores one order).
+      Order and movements are all-or-nothing; IndexedDB serialises overlapping `rw`
+      transactions, so a sale and a "+ Received" can't lose each other's update.
+      **Backup: left out, like photos in 8c.** `buildExport`'s allowlist already drops
+      `stock`; movements aren't exported; `BACKUP_FORMAT_VERSION` stays 1. `importBackup`
+      with replace-details carries the stored `stock` forward next to `image` (rename
+      `keepingImages` → `keepingDeviceFields`). Imported orders never move stock; new imported
+      products arrive untracked. Admin's backup note says counts and history stay on this
+      phone.
+      **UI (PR 2)** — `src/components/StockControls.tsx` in each Admin product row: status
+      "Stock: N" / "Not tracked" / "Stock unreadable — set a count"; "Set count for X" opens an
+      inline numeric input (`inputMode="numeric"`) with Cancel/Save; "+ Received for X" only
+      while tracked; "History for X" lists the latest 50, newest first (date + time via
+      `localDayKey` + `formatLocalTime`, kind "Sale #42"/"Void #42"/"Count"/"Received",
+      signed delta, resulting level; invalid rows skipped, logged once, counted in a muted
+      footer). Every control ≥ 48px. `ProductTile` shows `stockLabel` under the price for
+      tracked products only (Sold-out tiles too), class `tile-stock`, plus `tile-stock-low`
+      when ≤ 0 (weight as well as colour); never disables a tile because of stock.
+      `SellScreen` logs invalid stock once per id (second `useLogInvalidOnce`, `stock:` key
+      prefix); the tile itself never logs. No new dependencies, no network.
+      Files, PR 1 (data + domain, no UI): `src/domain/types.ts`, `src/domain/stock.ts`,
+      `src/domain/stock.test.ts`, `src/db/db.ts`, `src/db/db.test.ts`, `src/db/stock.ts`,
+      `src/db/stock.test.ts`, `src/db/orders.ts` (`completeOrder` transaction scope + one
+      call; `voidOrder` body), `src/db/orders.test.ts`, `src/db/backup.ts`,
+      `src/db/backup.test.ts`, `docs/SPEC.md`.
+      Files, PR 2 (UI): `src/components/StockControls.tsx`,
+      `src/components/StockControls.test.tsx`, `src/screens/AdminScreen.tsx`,
+      `src/screens/AdminScreen.css`, `src/components/ProductTile.tsx`,
+      `src/components/ProductTile.test.tsx`, `src/index.css` (`.tile-stock*`),
+      `src/screens/SellScreen.tsx`, `src/screens/SellScreen.test.tsx`,
+      `src/App.stock.test.tsx`, `docs/DEVICE-QA.md`.
+      _Accept:_ **PR 1** — `stock.ts` unit tests: `readStock` for absent, `0`, `-3`, `NaN`,
+      `1.5`, `'5'`, `1e300`, `null`, and a `null`/array/BigInt product, never throwing;
+      parsers reject `-1`, `1.5`, `''`, `100001`, and `0` (received only); `planStockChanges`
+      ignores untracked, skips missing/invalid/overflow with a reason, never throws. A db test
+      opens a real **v2** database (bare `Dexie` declaring versions 1–2, asserted
+      `verno === 2`) with products, orders and a settings row, reopens with `PosDatabase`:
+      `verno === 3`, every row `toEqual`-unchanged, no product has a `stock` key,
+      `stockMovements` usable (existing `verno === 2` expectations become 3). On a fresh
+      `PosDatabase`: set count 5 on A, cash sale of 2 A + 1 untracked B → A = 3, B has no
+      `stock` key, one `sale` movement (delta -2, level 3, orderId, number); 4 more → -1 (not
+      blocked); void → +2 back, second `voidOrder` changes nothing (`voidedAt`, level, no
+      second `void` movement); an order sold while A was untracked, voided after tracking
+      starts, leaves A unchanged; an archived tracked product still decrements; a line whose
+      product row is missing or has `stock: 'abc'` still completes the sale, writes nothing
+      for it, logs once; a forced movement-write failure rejects `completeOrder` with **no**
+      order stored and the count unchanged; a StrictMode double tap through
+      `useCompleteOrder` decrements once; `receiveStock` on untracked rejects; `importBackup`
+      with `replaceDetails` keeps `stock` (and image); exported JSON has no `stock` and no
+      movements. **PR 2** — Testing Library: tracked tile shows "Stock: 5", untracked shows
+      nothing, ≤ 0 has `tile-stock-low` and stays tappable; corrupt stock renders untracked,
+      logged once; Admin (unlocked) Set count, "+ Received" hidden until tracked, history rows
+      with kind/delta/level, corrupt movement skipped with footer count; every stock control
+      behind the PIN. `App.stock.test.tsx`: unlock Admin, set 5, Sell → Cart → Cash → Exact →
+      tile "Stock: 4"; void in Orders → "Stock: 5". `fetch` never called. `npm test`,
+      `npm run typecheck`, `npm run lint`, `npm run build` pass (separate commands).
+
 - [ ] **9. (Later) Backend sync.** Minimal Node/Hono API with SQLite, `POST /orders` upsert by
       id, `useSync` pushes `pending` orders when online and marks them `synced`. Owner dashboard
       page. Only start after 1–8 are boring and reliable.
