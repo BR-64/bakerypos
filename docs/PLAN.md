@@ -380,7 +380,7 @@ salt)`, `verifyPin`, `generateRecoveryCode`), `pinHash`/`pinSalt`/`recoveryHash`
       text-only tile; a corrupt photo is skipped and logged once, a decode failure falls back
       silently.
 
-- [ ] **8d. Stock tracking.** Two PRs, merged in order; tick at the second merge. Owner
+- [x] **8d. Stock tracking.** Two PRs, merged in order; tick at the second merge. Owner
       decisions: only Admin (behind the PIN) adjusts stock; stock may go below 0 and never
       blocks a sale; stock drops when a sale is confirmed (not when added to the cart); a void
       adds back exactly what that sale removed; tracking is opt-in per product; the Sell tile
@@ -395,10 +395,10 @@ salt)`, `verifyPin`, `generateRecoveryCode`), `pinHash`/`pinSalt`/`recoveryHash`
       count is free on the phone, while summing an append-only log (~100k rows/year) per tile
       would grow without bound and depend on rows a prune or partial import could lose.
       `StockMovement { id; productId; kind: 'sale' | 'void' | 'set' | 'received'; delta /*
-    signed safe integer */; level /* after */; previous: number | null /* null = untracked
-    or unreadable */; createdAt /* toISOString() */; orderId?; orderNumber? }` in
+  signed safe integer */; level /* after */; previous: number | null /* null = untracked
+  or unreadable */; createdAt /* toISOString() */; orderId?; orderNumber? }` in
       `types.ts`. `src/db/db.ts`: new `.version(3).stores({ stockMovements: 'id, orderId,
-    [productId+createdAt]' })`; versions 1–2 byte-identical; `products`/`orders`/`settings`
+  [productId+createdAt]' })`; versions 1–2 byte-identical; `products`/`orders`/`settings`
       not re-listed (7a's reasoning); no `upgrade()` — every device upgrades all-untracked.
       **Domain** `src/domain/stock.ts` (no React, no Dexie): `readStock(value: unknown)` →
       `{kind:'untracked'} | {kind:'tracked', level} | {kind:'invalid'}` (missing key =
@@ -407,13 +407,13 @@ salt)`, `verifyPin`, `generateRecoveryCode`), `pinHash`/`pinSalt`/`recoveryHash`
       `parseStockCount(text)` digits only 0..max, `parseReceivedQty(text)` digits only 1..max,
       each `{ok, value} | {ok:false, error}`. `saleQuantities(lines: unknown)` sums qty per
       `productId` over the `partitionCartLines` valid subset. `planStockChanges({ rows,
-    deltas, kind, at, newId, orderId?, orderNumber? })` → `{ updates, movements, skipped }`,
+  deltas, kind, at, newId, orderId?, orderNumber? })` → `{ updates, movements, skipped }`,
       never throws: untracked rows ignored silently; missing row, invalid stock, or a level
       that would leave safe-integer range → `skipped` with a reason, product not written.
       `isValidStockMovement` / `partitionStockMovements`. `stockLabel(level)` →
       `{ text: 'Stock: 5', low: level <= 0 }`.
       **Data** `src/db/stock.ts`: `setStockCount(id, count, db)` and `receiveStock(id, qty,
-    db)` — each one `rw` transaction over `products` + `stockMovements`, re-reading the row
+  db)` — each one `rw` transaction over `products` + `stockMovements`, re-reading the row
       inside it, writing with `update` (never `put`), appending one movement. `receiveStock`
       rejects untracked/unreadable ("Set a count first"); `setStockCount` is the repair path
       for unreadable stock (`previous: null`, `delta = count`) and logs a delta-0 movement for
