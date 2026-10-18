@@ -2,8 +2,10 @@ import { v4 as uuid } from 'uuid'
 import { partitionCartLines } from '../domain/cart'
 import { localDayRange } from '../domain/day'
 import { cartTotal } from '../domain/money'
+import type { StockSkip } from '../domain/stock'
 import type { CartLine, Order, Payment } from '../domain/types'
 import { db, type PosDatabase } from './db'
+import { applySaleStock, applyVoidStock } from './stock'
 
 const isNonNegativeSafeInteger = (n: unknown): n is number =>
   Number.isSafeInteger(n) && (n as number) >= 0
@@ -39,36 +41,76 @@ export async function completeOrder(
     throw new Error('Cannot take a PromptPay payment for ฿0')
   }
 
-  return database.transaction('rw', database.orders, async () => {
-    const last = await database.orders.orderBy('number').last()
-    const order: Order = {
-      id: uuid(),
-      number: (last?.number ?? 0) + 1,
-      lines: lines.map((l) => ({ ...l })),
-      total,
-      payment,
-      status: 'completed',
-      createdAt: new Date().toISOString(),
-      sync: 'pending',
-    }
-    await database.orders.add(order)
-    return order
-  })
+  // Stock (task 8d) moves in this same transaction, so the order and its
+  // stock movements are all-or-nothing. Bad stock data is skipped by
+  // `applySaleStock` before any write and never fails the sale; only a
+  // failing write (the same IndexedDB the order lives in) aborts it.
+  const { order, skipped } = await database.transaction(
+    'rw',
+    database.orders,
+    database.products,
+    database.stockMovements,
+    async () => {
+      const last = await database.orders.orderBy('number').last()
+      const order: Order = {
+        id: uuid(),
+        number: (last?.number ?? 0) + 1,
+        lines: lines.map((l) => ({ ...l })),
+        total,
+        payment,
+        status: 'completed',
+        createdAt: new Date().toISOString(),
+        sync: 'pending',
+      }
+      await database.orders.add(order)
+      const skipped = await applySaleStock(database, order)
+      return { order, skipped }
+    },
+  )
+  logSkippedStock('completeOrder', skipped)
+  return order
 }
 
-/** Void an order. It stays in the DB (and in the Z report, under "voided"). */
+/**
+ * Void an order. It stays in the DB (and in the Z report, under "voided").
+ *
+ * One transaction with the stock add-back (task 8d). Voiding an order that
+ * is already voided writes nothing — `voidedAt`/`voidReason` stay as they
+ * were and no stock moves — so a repeated void can never add a sale back
+ * twice, whatever the UI does.
+ */
 export async function voidOrder(
   id: string,
   reason: string,
   database: PosDatabase = db,
 ): Promise<void> {
-  const n = await database.orders.update(id, {
-    status: 'voided',
-    voidedAt: new Date().toISOString(),
-    voidReason: reason,
-    sync: 'pending',
-  })
-  if (n === 0) throw new Error(`Order ${id} not found`)
+  const skipped = await database.transaction(
+    'rw',
+    database.orders,
+    database.products,
+    database.stockMovements,
+    async () => {
+      const stored = await database.orders.get(id)
+      if (stored === undefined) throw new Error(`Order ${id} not found`)
+      if (stored.status === 'voided') return []
+      const voided = {
+        status: 'voided' as const,
+        voidedAt: new Date().toISOString(),
+        voidReason: reason,
+        sync: 'pending' as const,
+      }
+      await database.orders.update(id, voided)
+      return applyVoidStock(database, { ...stored, ...voided, id })
+    },
+  )
+  logSkippedStock('voidOrder', skipped)
+}
+
+/** Called after commit: a skipped product is logged, never thrown. */
+function logSkippedStock(where: string, skipped: StockSkip[]): void {
+  for (const skip of skipped) {
+    console.error(`${where}: stock not changed for product ${skip.productId}: ${skip.reason}`)
+  }
 }
 
 /**

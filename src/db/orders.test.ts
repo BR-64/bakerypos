@@ -1,10 +1,14 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { act, renderHook, waitFor } from '@testing-library/react'
+import { StrictMode } from 'react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { addProduct } from '../domain/cart'
 import { cartTotal } from '../domain/money'
-import type { Order } from '../domain/types'
+import type { CartLine, Order, Payment, Product } from '../domain/types'
+import { useCompleteOrder } from '../hooks/useCompleteOrder'
 import { PosDatabase } from './db'
 import { completeOrder, ordersForDay, todaysOrders, voidOrder } from './orders'
 import { seedProducts } from './seed'
+import { setStockCount } from './stock'
 
 let database: PosDatabase
 
@@ -187,6 +191,204 @@ describe('voidOrder', () => {
 
   it('throws for an unknown id', async () => {
     await expect(voidOrder('nope', 'x', database)).rejects.toThrow('not found')
+  })
+})
+
+describe('stock (task 8d)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  const productA: Product = {
+    id: 'p-a',
+    name: 'Brownie',
+    price: 6500,
+    category: 'brownies',
+    sortOrder: 1,
+    outOfStock: false,
+    archived: false,
+  }
+  const productB: Product = { ...productA, id: 'p-b', name: 'Cookie', price: 3000, sortOrder: 2 }
+  const lineA = (qty: number): CartLine => ({
+    productId: 'p-a',
+    name: 'Brownie',
+    unitPrice: 6500,
+    qty,
+  })
+  const lineB = (qty: number): CartLine => ({
+    productId: 'p-b',
+    name: 'Cookie',
+    unitPrice: 3000,
+    qty,
+  })
+  const exact = (lines: CartLine[]): Payment => ({
+    method: 'cash',
+    tendered: cartTotal(lines),
+    change: 0,
+  })
+  const sell = (lines: CartLine[]) => completeOrder(lines, exact(lines), database)
+  const stockOf = async (id: string) => (await database.products.get(id))?.stock
+
+  beforeEach(async () => {
+    await database.products.bulkAdd([productA, productB])
+  })
+
+  it('a sale takes tracked stock off, leaves untracked alone, and logs one sale movement', async () => {
+    await setStockCount('p-a', 5, database)
+
+    const order = await sell([lineA(2), lineB(1)])
+
+    expect(await stockOf('p-a')).toBe(3)
+    expect(await database.products.get('p-b')).not.toHaveProperty('stock')
+    const sales = await database.stockMovements.where('orderId').equals(order.id).toArray()
+    expect(sales).toEqual([
+      {
+        id: expect.any(String),
+        productId: 'p-a',
+        kind: 'sale',
+        delta: -2,
+        level: 3,
+        previous: 5,
+        createdAt: order.createdAt,
+        orderId: order.id,
+        orderNumber: order.number,
+      },
+    ])
+  })
+
+  it('a sale is never blocked by stock: the count goes below zero', async () => {
+    await setStockCount('p-a', 5, database)
+    await sell([lineA(2)])
+
+    await sell([lineA(4)])
+
+    expect(await stockOf('p-a')).toBe(-1)
+    expect(await database.orders.count()).toBe(2)
+  })
+
+  it('a void adds back exactly what the sale took; a second void changes nothing', async () => {
+    await setStockCount('p-a', 5, database)
+    const order = await sell([lineA(2)])
+    await sell([lineA(4)])
+    expect(await stockOf('p-a')).toBe(-1)
+
+    await voidOrder(order.id, 'Wrong item', database)
+
+    expect(await stockOf('p-a')).toBe(1)
+    const afterFirst = await database.orders.get(order.id)
+    expect(afterFirst).toMatchObject({ status: 'voided', voidReason: 'Wrong item' })
+    const voids = await database.stockMovements.where('orderId').equals(order.id).toArray()
+    expect(voids.filter((m) => m.kind === 'void')).toEqual([
+      expect.objectContaining({ productId: 'p-a', delta: 2, level: 1, previous: -1 }),
+    ])
+
+    await voidOrder(order.id, 'Pressed twice', database)
+
+    expect(await database.orders.get(order.id)).toEqual(afterFirst)
+    expect(await stockOf('p-a')).toBe(1)
+    const after = await database.stockMovements.where('orderId').equals(order.id).toArray()
+    expect(after.filter((m) => m.kind === 'void')).toHaveLength(1)
+  })
+
+  it('voiding an order sold while untracked leaves the count unchanged', async () => {
+    const order = await sell([lineA(3)])
+    await setStockCount('p-a', 10, database)
+
+    await voidOrder(order.id, 'Wrong item', database)
+
+    expect(await stockOf('p-a')).toBe(10)
+    expect(await database.stockMovements.where('orderId').equals(order.id).count()).toBe(0)
+  })
+
+  it('an archived tracked product still decrements', async () => {
+    await setStockCount('p-a', 5, database)
+    await database.products.update('p-a', { archived: true })
+
+    await sell([lineA(1)])
+
+    expect(await stockOf('p-a')).toBe(4)
+  })
+
+  it('a line whose product row is missing still completes the sale, writes nothing for it, logs once', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    await setStockCount('p-b', 5, database)
+    const gone: CartLine = { productId: 'p-gone', name: 'Gone', unitPrice: 1000, qty: 1 }
+
+    const order = await sell([gone, lineB(1)])
+
+    expect(await database.orders.get(order.id)).toEqual(order)
+    // The good product in the same order still moved.
+    expect(await stockOf('p-b')).toBe(4)
+    expect(await database.products.get('p-gone')).toBeUndefined()
+    const movements = await database.stockMovements.where('orderId').equals(order.id).toArray()
+    expect(movements.map((m) => m.productId)).toEqual(['p-b'])
+    expect(errorSpy).toHaveBeenCalledTimes(1)
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('p-gone'))
+  })
+
+  it("a line whose product has stock: 'abc' still completes the sale, writes nothing for it, logs once", async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    await setStockCount('p-b', 5, database)
+    await database.products.update('p-a', { stock: 'abc' as unknown as number })
+    const before = await database.products.get('p-a')
+
+    const order = await sell([lineA(1), lineB(1)])
+
+    expect(await database.orders.get(order.id)).toEqual(order)
+    expect(await stockOf('p-b')).toBe(4)
+    expect(await database.products.get('p-a')).toEqual(before)
+    const movements = await database.stockMovements.where('orderId').equals(order.id).toArray()
+    expect(movements.map((m) => m.productId)).toEqual(['p-b'])
+    expect(errorSpy).toHaveBeenCalledTimes(1)
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('p-a'))
+  })
+
+  it('a failing movement write rejects completeOrder with no order stored and the count unchanged', async () => {
+    await setStockCount('p-a', 5, database)
+    vi.spyOn(database.stockMovements, 'bulkAdd').mockRejectedValueOnce(new Error('disk full'))
+
+    await expect(sell([lineA(2)])).rejects.toThrow('disk full')
+
+    expect(await database.orders.count()).toBe(0)
+    expect(await stockOf('p-a')).toBe(5)
+    // Only the `set` movement: the sale's movement rolled back with the order.
+    expect((await database.stockMovements.toArray()).map((m) => m.kind)).toEqual(['set'])
+
+    // A retry stores exactly one order and takes the stock off once.
+    await sell([lineA(2)])
+    expect(await database.orders.count()).toBe(1)
+    expect(await stockOf('p-a')).toBe(3)
+  })
+
+  it('a failing void write leaves the order completed and the count unchanged', async () => {
+    await setStockCount('p-a', 5, database)
+    const order = await sell([lineA(2)])
+    vi.spyOn(database.stockMovements, 'bulkAdd').mockRejectedValueOnce(new Error('disk full'))
+
+    await expect(voidOrder(order.id, 'Wrong item', database)).rejects.toThrow('disk full')
+
+    expect((await database.orders.get(order.id))?.status).toBe('completed')
+    expect(await stockOf('p-a')).toBe(3)
+  })
+
+  it('a StrictMode double tap through useCompleteOrder decrements once', async () => {
+    await setStockCount('p-a', 5, database)
+    const lines = [lineA(2)]
+    const onOrderComplete = vi.fn()
+    const { result } = renderHook(() => useCompleteOrder(lines, database, onOrderComplete), {
+      wrapper: StrictMode,
+    })
+
+    act(() => {
+      result.current.complete(exact(lines))
+      result.current.complete(exact(lines))
+    })
+    act(() => result.current.complete(exact(lines)))
+
+    await waitFor(() => expect(onOrderComplete).toHaveBeenCalledTimes(1))
+    expect(await database.orders.count()).toBe(1)
+    expect(await stockOf('p-a')).toBe(3)
+    expect(await database.stockMovements.count()).toBe(2) // the set + one sale
   })
 })
 
