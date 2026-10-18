@@ -77,16 +77,13 @@ describe('App — stock', () => {
     })
     expect((await database.products.get('p-brownie-9'))?.stock).toBe(4)
 
-    // Void it in Orders. Admin was unlocked a moment ago, so the PIN is
-    // only asked for if that unlock has lapsed.
+    // Void it in Orders. Admin was unlocked seconds ago, well inside the
+    // 5-minute window, so Void must not ask for the PIN again.
     goTo('Orders')
     fireEvent.click(await screen.findByRole('button', { name: /^#1/ }))
     fireEvent.click(await screen.findByRole('button', { name: 'Void this order' }))
-    if (screen.queryByRole('heading', { name: 'Enter the PIN for Void' }) !== null) {
-      tapPin('1234')
-      fireEvent.click(screen.getByRole('button', { name: 'Unlock' }))
-    }
     fireEvent.click(await screen.findByRole('button', { name: 'Duplicate order' }))
+    expect(screen.queryByRole('heading', { name: 'Enter the PIN for Void' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Yes, void' }))
     await waitFor(async () => expect((await database.orders.toArray())[0].status).toBe('voided'))
 

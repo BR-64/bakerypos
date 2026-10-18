@@ -121,6 +121,7 @@ export function StockControls({ product, database = db }: StockControlsProps) {
   return (
     <div className="stock-controls">
       <p
+        aria-live="polite"
         className={
           reading.kind === 'tracked' && reading.level <= 0
             ? 'stock-status stock-status-low'
