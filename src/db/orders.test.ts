@@ -290,6 +290,32 @@ describe('stock (task 8d)', () => {
     expect(after.filter((m) => m.kind === 'void')).toHaveLength(1)
   })
 
+  it('two voids at the same time add stock back once', async () => {
+    await setStockCount('p-a', 5, database)
+    const order = await sell([lineA(2)])
+
+    await Promise.all([
+      voidOrder(order.id, 'Wrong item', database),
+      voidOrder(order.id, 'Pressed twice', database),
+    ])
+
+    expect(await stockOf('p-a')).toBe(5)
+    const movements = await database.stockMovements.where('orderId').equals(order.id).toArray()
+    expect(movements.filter((m) => m.kind === 'void')).toHaveLength(1)
+  })
+
+  it('a corrupt stored order number is left off the sale movement, so a void still reverses it', async () => {
+    await setStockCount('p-a', 5, database)
+    await database.orders.add(makeOrder({ number: 5.5 }))
+
+    const order = await sell([lineA(2)])
+    const [sale] = await database.stockMovements.where('orderId').equals(order.id).toArray()
+    expect(sale).not.toHaveProperty('orderNumber')
+
+    await voidOrder(order.id, 'Wrong item', database)
+    expect(await stockOf('p-a')).toBe(5)
+  })
+
   it('voiding an order sold while untracked leaves the count unchanged', async () => {
     const order = await sell([lineA(3)])
     await setStockCount('p-a', 10, database)

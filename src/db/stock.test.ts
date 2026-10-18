@@ -71,6 +71,15 @@ describe('setStockCount', () => {
     expect((await database.products.get('p-brownie'))?.stock).toBe(6)
   })
 
+  it('logs a corrupt far-out count like an unreadable one, so the delta stays safe', async () => {
+    await database.products.add({ ...brownie, stock: -Number.MAX_SAFE_INTEGER })
+
+    const movement = await setStockCount('p-brownie', 5, database)
+
+    expect(movement).toMatchObject({ delta: 5, level: 5, previous: null })
+    expect(Number.isSafeInteger(movement.delta)).toBe(true)
+  })
+
   it('works on an archived product and leaves every other field (photo included) alone', async () => {
     const image = {
       blob: new Blob([new Uint8Array(1024)], { type: 'image/webp' }),

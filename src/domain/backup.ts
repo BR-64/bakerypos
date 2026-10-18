@@ -201,7 +201,7 @@ function productProblem(value: unknown): string | null {
  * that pictures are device-only: a backup stays a small, readable text
  * file that can be mailed to yourself, and an import can't carry someone
  * else's photos onto this phone. `importBackup` compensates by carrying
- * the stored picture forward over a replace (`keepingImages` in
+ * the stored picture forward over a replace (`keepingDeviceFields` in
  * `src/db/backup.ts`), so exporting and re-importing never costs a photo.
  */
 function readProduct(value: Record<string, unknown>): Product {

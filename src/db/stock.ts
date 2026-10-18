@@ -51,7 +51,12 @@ export async function setStockCount(
     const row = await database.products.get(id)
     if (row === undefined) throw new Error(`Product ${id} not found`)
     const reading = readStock(row)
-    const previous = reading.kind === 'tracked' ? reading.level : null
+    // A tracked level so far out (only corrupt data) that the delta would be
+    // unsafe is logged like an unreadable one, so the movement stays valid.
+    const previous =
+      reading.kind === 'tracked' && Number.isSafeInteger(count - reading.level)
+        ? reading.level
+        : null
     const movement: StockMovement = {
       id: uuid(),
       productId: id,
@@ -121,6 +126,17 @@ export async function stockHistory(
     .toArray()
 }
 
+/**
+ * `{ orderNumber }` only when the order's number is a safe integer >= 1. A
+ * corrupt number is left off rather than copied, so the movement stays valid
+ * (and a later void can still find and reverse it).
+ */
+function orderNumberField(order: Order): { orderNumber?: number } {
+  return Number.isSafeInteger(order.number) && order.number >= 1
+    ? { orderNumber: order.number }
+    : {}
+}
+
 /** Carry out a checked plan. Only Dexie is awaited, so the caller's transaction stays open. */
 async function writePlan(database: PosDatabase, plan: StockPlan): Promise<void> {
   for (const update of plan.updates) {
@@ -149,7 +165,7 @@ export async function applySaleStock(database: PosDatabase, order: Order): Promi
     at: order.createdAt,
     newId: uuid,
     orderId: order.id,
-    orderNumber: order.number,
+    ...orderNumberField(order),
   })
   await writePlan(database, plan)
   return plan.skipped
@@ -175,9 +191,7 @@ export async function applyVoidStock(database: PosDatabase, order: Order): Promi
     at: order.voidedAt ?? new Date().toISOString(),
     newId: uuid,
     orderId: order.id,
-    ...(Number.isSafeInteger(order.number) && order.number >= 1
-      ? { orderNumber: order.number }
-      : {}),
+    ...orderNumberField(order),
   })
   await writePlan(database, plan)
   return [...skipped, ...plan.skipped]
