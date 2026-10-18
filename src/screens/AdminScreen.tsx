@@ -5,6 +5,7 @@ import { BackupSection } from '../components/BackupSection'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import { PinPrompt } from '../components/PinPrompt'
 import { ProductImageField } from '../components/ProductImageField'
+import { StockControls } from '../components/StockControls'
 import { db, type PosDatabase } from '../db/db'
 import {
   allProducts,
@@ -339,6 +340,10 @@ function ProductAdmin({ database }: { database: PosDatabase }) {
         Photos are stored on this phone only, shrunk to about {MAX_IMAGE_EDGE}px wide. They are not
         included in a backup.
       </p>
+      <p className="admin-message muted">
+        Stock counts and their history also stay on this phone and are not in a backup. Tracking
+        starts with &ldquo;Set count&rdquo;; a sale never waits on stock.
+      </p>
       {error && (
         <p className="checkout-error" role="alert">
           {error}
@@ -452,6 +457,7 @@ function ProductAdmin({ database }: { database: PosDatabase }) {
                   )}
                 </div>
               )}
+              <StockControls product={product} database={database} />
               <ProductImageField product={product} database={database} />
             </li>
           ),

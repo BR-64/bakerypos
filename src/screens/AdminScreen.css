@@ -215,6 +215,71 @@
   background: var(--bg);
 }
 
+/* Admin → Menu → one product's stock (StockControls.tsx). Buttons and the
+   input reuse the 48px admin classes above. */
+.stock-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.stock-status {
+  margin: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Zero or below: bold and red, so it reads by weight as well as colour. */
+.stock-status-low {
+  color: #b3261e;
+  font-weight: 700;
+}
+
+.stock-form {
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+.stock-history {
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+.stock-history-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stock-history-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px solid rgb(0 0 0 / 0.06);
+  font-variant-numeric: tabular-nums;
+}
+
+.stock-history-when {
+  font-size: 0.8rem;
+}
+
+.stock-history-kind {
+  font-weight: 600;
+}
+
+.stock-history-delta,
+.stock-history-level {
+  text-align: right;
+}
+
 /* Admin → Menu → one product's photo (ProductImageField.tsx). */
 .admin-image-field {
   display: flex;

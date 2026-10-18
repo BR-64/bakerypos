@@ -1,11 +1,11 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PosDatabase } from '../db/db'
 import { completeOrder } from '../db/orders'
 import { getSettings, saveSettings } from '../db/settings'
 import { generateSalt, hashPin, MAX_PIN_ATTEMPTS } from '../domain/pin'
 import { DEFAULT_SETTINGS, type Settings } from '../domain/settings'
-import type { Product } from '../domain/types'
+import type { Product, StockMovement } from '../domain/types'
 import type { PinLock } from '../hooks/usePinLock'
 import { useSettings } from '../hooks/useSettings'
 import { AdminScreen } from './AdminScreen'
@@ -289,6 +289,96 @@ describe('AdminScreen — products', () => {
 
     expect(await screen.findByText('Croissant')).toBeInTheDocument()
     expect(screen.getByText('1 product couldn’t be displayed.')).toBeInTheDocument()
+  })
+})
+
+describe('AdminScreen — stock', () => {
+  it('renders no stock control at all while locked', async () => {
+    const pinSalt = generateSalt()
+    const settings: Settings = {
+      ...DEFAULT_SETTINGS,
+      pinHash: await hashPin('4821', pinSalt),
+      pinSalt,
+      recoveryHash: null,
+    }
+    await database.products.add({ ...croissant, stock: 5 })
+    renderAdmin({ lock: stubLock({ unlocked: false }), settings })
+
+    expect(screen.getByRole('heading', { name: 'Enter the PIN for Admin' })).toBeInTheDocument()
+    // Give the (never-mounted) product list every chance to appear.
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(screen.queryByText('Stock: 5')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Set count/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Received/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /History/ })).not.toBeInTheDocument()
+  })
+
+  it('sets a count, then offers "+ Received", and shows both in the history', async () => {
+    await database.products.bulkAdd([croissant, latte])
+    renderAdmin()
+
+    expect(await screen.findAllByText('Not tracked')).toHaveLength(2)
+    expect(
+      screen.queryByRole('button', { name: '+ Received for Croissant' }),
+    ).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Set count for Croissant' }))
+    fireEvent.change(screen.getByLabelText('New count for Croissant'), { target: { value: '5' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(await screen.findByText('Stock: 5')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '+ Received for Croissant' }))
+    fireEvent.change(screen.getByLabelText('How many Croissant arrived'), {
+      target: { value: '3' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(await screen.findByText('Stock: 8')).toBeInTheDocument()
+
+    // The other product is untouched, and stock never flips the sold-out toggle.
+    expect(screen.getByText('Not tracked')).toBeInTheDocument()
+    expect((await database.products.get('p-croissant'))?.outOfStock).toBe(false)
+    expect((await database.products.get('p-latte'))?.stock).toBeUndefined()
+
+    fireEvent.click(screen.getByRole('button', { name: 'History for Croissant' }))
+    const list = await screen.findByRole('list', { name: 'Stock history' })
+    const rows = within(list).getAllByRole('listitem')
+    expect(rows).toHaveLength(2)
+    // Same millisecond is possible in a test, so check each row's content
+    // rather than relying on their order here (StockControls.test pins it).
+    const texts = rows.map((row) => row.textContent ?? '')
+    expect(
+      texts.some((t) => t.includes('Received') && t.includes('+3') && t.includes('now 8')),
+    ).toBe(true)
+    expect(texts.some((t) => t.includes('Count') && t.includes('+5') && t.includes('now 5'))).toBe(
+      true,
+    )
+  })
+
+  it('skips a corrupt history row and counts it', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    await database.products.add({ ...croissant, stock: 2 })
+    await database.stockMovements.add({
+      id: 'm-bad',
+      productId: 'p-croissant',
+      kind: 'teleport',
+      delta: 2,
+      level: 2,
+      previous: null,
+      createdAt: new Date().toISOString(),
+    } as unknown as StockMovement)
+    renderAdmin()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'History for Croissant' }))
+
+    expect(await screen.findByText('1 entry couldn’t be displayed.')).toBeInTheDocument()
+    expect(screen.getByText('No stock changes yet.')).toBeInTheDocument()
+  })
+
+  it('says stock stays on this phone, like photos', async () => {
+    renderAdmin()
+    expect(
+      await screen.findByText(/Stock counts and their history also stay on this phone/),
+    ).toBeInTheDocument()
   })
 })
 
