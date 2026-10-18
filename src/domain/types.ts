@@ -63,6 +63,45 @@ export interface Product {
    * `src/domain/backup.ts`.
    */
   image?: ProductImage
+  /**
+   * How many are on hand, when this product's stock is tracked (task 8d).
+   * Absent = untracked — the normal state until Admin's "Set count". May go
+   * below 0 (a sale is never blocked by stock) and never changes
+   * `outOfStock`. A present value that isn't a safe integer is unreadable
+   * and treated as untracked everywhere (see `readStock` in
+   * `src/domain/stock.ts`). Unindexed, so no new Dexie version for
+   * `products`; device-only, like `image`, so never in a backup.
+   */
+  stock?: number
+}
+
+/**
+ * Why a product's stock count moved. `sale` and `void` are written by
+ * `completeOrder`/`voidOrder` in the same transaction as the order; `set`
+ * (a stocktake) and `received` (a delivery) by Admin.
+ */
+export type StockMovementKind = 'sale' | 'void' | 'set' | 'received'
+
+/**
+ * One line of a product's stock history. Append-only and history only: the
+ * current count lives on `Product.stock`, never summed from these.
+ */
+export interface StockMovement {
+  id: string
+  productId: string
+  kind: StockMovementKind
+  /** Signed safe integer: -2 for a sale of two, +2 for its void. */
+  delta: number
+  /** The product's stock after this movement. */
+  level: number
+  /** The stock before it; `null` when it was untracked or unreadable (a `set` repair). */
+  previous: number | null
+  /** `Date#toISOString()`. */
+  createdAt: string
+  /** The order a `sale`/`void` belongs to. Absent for `set`/`received`. */
+  orderId?: string
+  /** That order's human number, for "Sale #42" in the history. */
+  orderNumber?: number
 }
 
 export interface OrderLine {
