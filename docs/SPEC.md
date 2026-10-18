@@ -15,14 +15,16 @@ day, what sold and how much cash should be in the drawer.
 
 ## Non-goals for v1
 
-Inventory tracking, loyalty, discounts/promotions, multiple kiosks or staff logins, receipt
+Inventory beyond per-product counts, loyalty, discounts/promotions, multiple kiosks or staff logins, receipt
 printing, integrated card payments, automatic PromptPay confirmation, tax invoices.
 
 ## Screens
 
 **Sell (home).** Product grid, filtered by category tabs, tiles ≥ 88px tall showing name and
 price; out-of-stock tiles greyed and untappable. Tapping a tile adds one to the cart. A sticky
-bottom bar shows item count and total; tapping it opens the cart.
+bottom bar shows item count and total; tapping it opens the cart. A product whose stock is
+tracked also shows an informational "Stock: N" under the price (highlighted at 0 or below);
+stock never greys out or blocks a tile — only the manual out-of-stock toggle does.
 
 **Cart.** Lines with name, qty, −/+ steppers, line total. "Clear cart" with confirmation. Two
 big buttons: **Cash** and **PromptPay**.
@@ -44,6 +46,15 @@ total. Shareable as plain text (Web Share API / copy to clipboard).
 
 **Admin.** Product list: add, edit name/price/category, toggle out of stock, archive. Shop
 settings: shop name, PromptPay ID (phone or national ID), category order.
+
+**Stock (in Admin, behind the PIN).** Tracking is opt-in per product: a product is untracked
+until Admin's **Set count** (a stocktake, which also repairs an unreadable count). **+ Received**
+adds a delivery to a tracked count. Each product has a history of its latest 50 movements (sale,
+void, count, received) with the resulting level. A count drops when a sale is confirmed — not
+when it's added to the cart — and may go below 0; it never blocks a sale and never changes the
+out-of-stock toggle. Voiding an order adds back exactly what that sale removed (nothing, if the
+product wasn't tracked when it was sold). Counts and history stay on this phone: backups don't
+include them, and importing a backup never changes them.
 
 **PIN lock.** The Admin screen is behind a 4–6 digit PIN so a customer or new staff member
 can't edit prices on an unattended phone. The PIN is set the first time Admin is opened
